@@ -20,14 +20,14 @@ ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
 # FIGI codes
+FIGI_NRH6 = 'FUTNGM032600'
 FIGI_NGH6 = 'FUTNG0326000'
 FIGI_NGJ6 = 'FUTNG0426000'
 FIGI_VTBR = 'BBG004730ZJ9'
 
-# Offsets for counter-orders (in price points)
-# Simple format: FIGI: offset (same for buy and sell)
 OFFSETS = {
-    FIGI_NGH6: 0.010,   # NGH6: ±0.010
+    FIGI_NRH6: 0.010,   # NRH6: ±0.010
+    FIGI_NGH6: 0.025,   # NGH6: ±0.025
     FIGI_NGJ6: 0.010,   # NGJ6: ±0.010
     FIGI_VTBR: 0.40,    # VTBR: ±0.40
 }
@@ -166,7 +166,7 @@ async def check_new_trades():
             if not figi and trades:
                 figi = trades[0].get('figi')
             
-            if figi in [FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
+            if figi in [FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
                 price = 0
                 quantity = 1
                 if trades:
@@ -236,12 +236,15 @@ async def print_status():
     print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ===")
     
     # Get prices
-    prices = await get_prices([FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR])
+    prices = await get_prices([FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR])
+    nrh6_price = 'N/A'
     ngh6_price = 'N/A'
     ngj6_price = 'N/A'
     
     for p in prices:
-        if p.get('figi') == FIGI_NGH6:
+        if p.get('figi') == FIGI_NRH6:
+            nrh6_price = format_price(p.get('price', {}))
+        elif p.get('figi') == FIGI_NGH6:
             ngh6_price = format_price(p.get('price', {}))
         elif p.get('figi') == FIGI_NGJ6:
             ngj6_price = format_price(p.get('price', {}))
@@ -252,10 +255,11 @@ async def print_status():
     except:
         diff_str = 'N/A'
     
-    print(f"NGH6: {ngh6_price} | NGJ6: {ngj6_price} | Diff: {diff_str}")
+    print(f"NRH6: {nrh6_price} | NGH6: {ngh6_price} | NGJ6: {ngj6_price} | Diff: {diff_str}")
     
     # Get positions
     positions = await get_positions()
+    nrh6_qty = 0
     ngh6_qty = 0
     ngj6_qty = 0
     
@@ -265,12 +269,14 @@ async def print_status():
         blocked = int(pos.get('blocked', 0))
         total = balance + blocked
         
-        if figi == FIGI_NGH6:
+        if figi == FIGI_NRH6:
+            nrh6_qty = total
+        elif figi == FIGI_NGH6:
             ngh6_qty = total
         elif figi == FIGI_NGJ6:
             ngj6_qty = total
     
-    print(f"Positions - NGH6: {ngh6_qty} | NGJ6: {ngj6_qty}")
+    print(f"Positions - NRH6: {nrh6_qty} | NGH6: {ngh6_qty} | NGJ6: {ngj6_qty}")
     
     # Get orders
     orders = await get_orders()
