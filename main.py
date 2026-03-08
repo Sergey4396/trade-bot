@@ -5,6 +5,7 @@ Tinkoff Trading Bot with WebSocket
 import os
 import json
 import asyncio
+import ssl
 import aiohttp
 from websockets import connect
 
@@ -14,13 +15,19 @@ ACCOUNT_ID = None
 BASE_URL = 'https://invest-public-api.tbank.ru'
 WS_URL = 'wss://invest-public-api.tbank.ru/ws'
 
+# SSL context that doesn't verify certificates
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
 async def get_account_id():
     """Get account ID"""
     global ACCOUNT_ID
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={}, headers=headers) as resp:
             data = await resp.json()
             accounts = data.get('accounts', [])
@@ -34,7 +41,8 @@ async def get_prices(figi_list):
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={'figi': figi_list}, headers=headers) as resp:
             data = await resp.json()
             return data.get('lastPrices', [])
@@ -47,7 +55,8 @@ async def get_positions():
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetPositions'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={'accountId': ACCOUNT_ID}, headers=headers) as resp:
             data = await resp.json()
             return data.get('futures', [])
@@ -68,7 +77,8 @@ async def post_order(figi, quantity, direction, order_type='ORDER_TYPE_MARKET'):
         'orderType': order_type
     }
     
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json=order_data, headers=headers) as resp:
             return await resp.json()
 
@@ -83,28 +93,31 @@ async def websocket_handler():
         'Authorization': f'Bearer {TOKEN}',
     }
     
-    print(f"Connecting to WebSocket...")
+    print("Connecting to WebSocket...")
     
-    async with connect(WS_URL, extra_headers=headers) as ws:
-        print("Connected!")
+    # Create SSL context that doesn't verify
+    import websockets
+    ws = await websockets.connect(WS_URL, extra_headers=headers, ssl=ssl_context)
+    
+    print("Connected!")
+    
+    # Subscribe to account orders
+    subscribe_msg = json.dumps({
+        'accounts': [ACCOUNT_ID]
+    })
+    await ws.send(subscribe_msg)
+    
+    print(f"Subscribed to account: {ACCOUNT_ID}")
+    
+    # Listen for messages
+    async for message in ws:
+        data = json.loads(message)
+        print(f"Received: {data}")
         
-        # Subscribe to account orders
-        subscribe_msg = json.dumps({
-            'accounts': [ACCOUNT_ID]
-        })
-        await ws.send(subscribe_msg)
-        
-        print(f"Subscribed to account: {ACCOUNT_ID}")
-        
-        # Listen for messages
-        async for message in ws:
-            data = json.loads(message)
-            print(f"Received: {data}")
-            
-            # Handle different message types
-            if 'orderTrades' in data:
-                order_trade = data['orderTrades']
-                print(f"Order executed! OrderID: {order_trade.get('orderId')}")
+        # Handle different message types
+        if 'orderTrades' in data:
+            order_trade = data['orderTrades']
+            print(f"Order executed! OrderID: {order_trade.get('orderId')}")
 
 async def main():
     print("Tinkoff Trading Bot")
@@ -118,6 +131,10 @@ async def main():
     figi_list = ['FUTNG0326000', 'FUTNG0426000']  # NGH6, NGJ6
     prices = await get_prices(figi_list)
     print(f"Prices: {prices}")
+    
+    # Get positions
+    positions = await get_positions()
+    print(f"Positions: {positions}")
     
     # Start WebSocket
     try:
