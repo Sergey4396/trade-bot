@@ -23,6 +23,14 @@ ssl_context.verify_mode = ssl.CERT_NONE
 FIGI_NGH6 = 'FUTNG0326000'
 FIGI_NGJ6 = 'FUTNG0426000'
 
+# Offsets for counter-orders (in price points)
+# Format: FIGI: {'buy_offset': +0.010, 'sell_offset': -0.010}
+# Positive offset = price goes UP for buy orders, DOWN for sell orders
+OFFSETS = {
+    FIGI_NGH6: {'buy': 0.010, 'sell': 0.010},   # NGH6: ±0.010
+    FIGI_NGJ6: {'buy': 0.010, 'sell': 0.010},   # NGJ6: ±0.010
+}
+
 async def get_account_id():
     global ACCOUNT_ID
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts'
@@ -97,6 +105,90 @@ async def post_order(figi, quantity, direction, order_type='ORDER_TYPE_MARKET'):
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json=order_data, headers=headers) as resp:
             return await resp.json()
+
+async def get_operations(from_date, to_date):
+    """Get operations (trades)"""
+    global ACCOUNT_ID
+    if not ACCOUNT_ID:
+        await get_account_id()
+    
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetOperations'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    # Get operations for last N seconds
+    from_iso = from_date.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+    to_iso = to_date.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+    
+    operations_data = {
+        'accountId': ACCOUNT_ID,
+        'from': from_iso,
+        'to': to_iso,
+        'state': 'OPERATION_STATE_EXECUTED'
+    }
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json=operations_data, headers=headers) as resp:
+            data = await resp.json()
+            return data.get('operations', [])
+
+# Track last known operations
+last_operation_ids = set()
+
+async def check_new_trades():
+    """Check for new executed trades and place counter-orders"""
+    global last_operation_ids
+    
+    from datetime import timedelta
+    now = datetime.now()
+    # Get operations from last 60 seconds
+    operations = await get_operations(now - timedelta(seconds=60), now)
+    
+    new_trades = []
+    for op in operations:
+        op_id = op.get('id')
+        if op_id and op_id not in last_operation_ids:
+            # Check if it's a trade for our FIGIs
+            trades = op.get('trades', [])
+            for trade in trades:
+                figi = trade.get('figi')
+                if figi in [FIGI_NGH6, FIGI_NGJ6]:
+                    direction = op.get('direction', '')  # OPERATION_DIRECTION_BUY or SELL
+                    price = format_price(trade.get('price', {}))
+                    new_trades.append({
+                        'figi': figi,
+                        'direction': direction,
+                        'price': price,
+                        'quantity': trade.get('quantity', '1')
+                    })
+                    last_operation_ids.add(op_id)
+    
+    return new_trades
+
+async def place_counter_order(trade_info):
+    """Place counter-order at specified price offset"""
+    figi = trade_info['figi']
+    direction = trade_info['direction']
+    price = float(trade_info['price'])
+    
+    # Determine counter direction
+    if direction == 'OPERATION_DIRECTION_BUY':
+        counter_direction = 'ORDER_DIRECTION_SELL'
+        # Set price lower for sell
+        counter_price = price - 0.010  # 0.010 below
+    else:  # SELL
+        counter_direction = 'ORDER_DIRECTION_BUY'
+        # Set price higher for buy
+        counter_price = price + 0.010  # 0.010 above
+    
+    # Round to 3 decimal places
+    counter_price = round(counter_price, 3)
+    
+    print(f"Placing counter-order: {figi} {counter_direction} at {counter_price}")
+    
+    result = await post_order(figi, 1, counter_price)
+    print(f"Order result: {result}")
+    return result
 
 def format_price(price_dict):
     """Format price from units/nano"""
