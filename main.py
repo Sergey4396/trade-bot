@@ -89,17 +89,21 @@ async def websocket_handler():
     if not ACCOUNT_ID:
         await get_account_id()
     
-    headers = {
-        'Authorization': f'Bearer {TOKEN}',
-    }
-    
     print("Connecting to WebSocket...")
     
     # Create SSL context that doesn't verify
     import websockets
-    ws = await websockets.connect(WS_URL, extra_headers=headers, ssl=ssl_context)
+    ws = await websockets.connect(WS_URL, ssl=ssl_context)
     
     print("Connected!")
+    
+    # Send authorization as first message
+    auth_msg = json.dumps({
+        'headers': {
+            'Authorization': f'Bearer {TOKEN}'
+        }
+    })
+    await ws.send(auth_msg)
     
     # Subscribe to account orders
     subscribe_msg = json.dumps({
