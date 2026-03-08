@@ -155,19 +155,6 @@ async def check_new_trades():
     now = datetime.now()
     operations = await get_operations(now - timedelta(seconds=60), now)
     
-    # Debug
-    print(f"DEBUG: Total operations: {len(operations)}")
-    
-    # Debug: print all operations with our FIGIs
-    for op in operations:
-        figi = op.get('figi')
-        trades = op.get('trades', [])
-        if not figi and trades:
-            figi = trades[0].get('figi')
-        if figi in [FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
-            op_type = op.get('type', '')
-            print(f"DEBUG OP: id={op.get('id')}, type={op_type}, figi={figi}")
-    
     new_trades = []
     for op in operations:
         op_id = op.get('id')
@@ -194,8 +181,6 @@ async def check_new_trades():
                     direction = 'OPERATION_DIRECTION_SELL'
                 else:
                     direction = None
-                
-                print(f"DEBUG: figi={figi}, op_type={op_type}, direction={direction}")
                 
                 if direction:
                     new_trades.append({
