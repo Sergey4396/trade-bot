@@ -155,6 +155,9 @@ async def check_new_trades():
     now = datetime.now()
     operations = await get_operations(now - timedelta(seconds=60), now)
     
+    # Debug
+    print(f"DEBUG: Total operations: {len(operations)}")
+    
     # Debug: print all operations with our FIGIs
     for op in operations:
         figi = op.get('figi')
