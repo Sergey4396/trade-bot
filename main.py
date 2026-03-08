@@ -91,19 +91,31 @@ async def websocket_handler():
     
     print("Connecting to WebSocket...")
     
-    # Create SSL context that doesn't verify
+    # Try different URL formats
     import websockets
-    ws = await websockets.connect(WS_URL, ssl=ssl_context)
     
-    print("Connected!")
+    ws_url = 'wss://invest-public-api.tinkoff.ru/ws'
     
-    # Send authorization as first message
-    auth_msg = json.dumps({
-        'headers': {
-            'Authorization': f'Bearer {TOKEN}'
-        }
-    })
-    await ws.send(auth_msg)
+    # Method 1: with subprotocols
+    try:
+        ws = await websockets.connect(
+            ws_url,
+            ssl=ssl_context,
+            subprotocols=['json'],
+            additional_headers={
+                'Authorization': f'Bearer {TOKEN}'
+            }
+        )
+        print("Connected!")
+    except Exception as e1:
+        print(f"Method 1 failed: {e1}")
+        # Method 2: simple connect
+        try:
+            ws = await websockets.connect(ws_url, ssl=ssl_context)
+            print("Connected (method 2)!")
+        except Exception as e2:
+            print(f"Method 2 failed: {e2}")
+            raise
     
     # Subscribe to account orders
     subscribe_msg = json.dumps({
