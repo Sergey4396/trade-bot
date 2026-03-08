@@ -12,8 +12,8 @@ from websockets import connect
 TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
 ACCOUNT_ID = None
 
-BASE_URL = 'https://invest-public-api.tbank.ru'
-WS_URL = 'wss://invest-public-api.tbank.ru/ws'
+BASE_URL = 'https://invest-public-api.tinkoff.ru'
+WS_URL = 'wss://invest-public-api.tinkoff.ru/ws'
 
 # SSL context that doesn't verify certificates
 ssl_context = ssl.create_default_context()
