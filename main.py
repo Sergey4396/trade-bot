@@ -22,13 +22,14 @@ ssl_context.verify_mode = ssl.CERT_NONE
 # FIGI codes
 FIGI_NGH6 = 'FUTNG0326000'
 FIGI_NGJ6 = 'FUTNG0426000'
+FIGI_VTBR = 'BBG004730ZJ9'
 
 # Offsets for counter-orders (in price points)
-# Format: FIGI: {'buy_offset': +0.010, 'sell_offset': -0.010}
-# Positive offset = price goes UP for buy orders, DOWN for sell orders
+# Simple format: FIGI: offset (same for buy and sell)
 OFFSETS = {
-    FIGI_NGH6: {'buy': 0.010, 'sell': 0.010},   # NGH6: ±0.010
-    FIGI_NGJ6: {'buy': 0.010, 'sell': 0.010},   # NGJ6: ±0.010
+    FIGI_NGH6: 0.010,   # NGH6: ±0.010
+    FIGI_NGJ6: 0.010,   # NGJ6: ±0.010
+    FIGI_VTBR: 0.40,    # VTBR: ±0.40
 }
 
 async def get_account_id():
@@ -85,7 +86,7 @@ async def get_orders():
             data = await resp.json()
             return data.get('orders', [])
 
-async def post_order(figi, quantity, direction, order_type='ORDER_TYPE_MARKET'):
+async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TYPE_LIMIT'):
     global ACCOUNT_ID
     if not ACCOUNT_ID:
         await get_account_id()
@@ -100,6 +101,17 @@ async def post_order(figi, quantity, direction, order_type='ORDER_TYPE_MARKET'):
         'accountId': ACCOUNT_ID,
         'orderType': order_type
     }
+    
+    # Add price for limit orders
+    if price is not None:
+        if figi.startswith('FUT'):
+            price_str = f"{price:.3f}"
+        else:
+            price_str = f"{price:.2f}"
+        parts = price_str.split('.')
+        units = int(parts[0])
+        nano = int(parts[1].ljust(9, '0')[:9])
+        order_data['price'] = {'units': units, 'nano': nano}
     
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
@@ -141,26 +153,43 @@ async def check_new_trades():
     
     from datetime import timedelta
     now = datetime.now()
-    # Get operations from last 60 seconds
     operations = await get_operations(now - timedelta(seconds=60), now)
     
     new_trades = []
     for op in operations:
         op_id = op.get('id')
         if op_id and op_id not in last_operation_ids:
-            # Check if it's a trade for our FIGIs
+            figi = op.get('figi')
+            op_type = op.get('type', '')
             trades = op.get('trades', [])
-            for trade in trades:
-                figi = trade.get('figi')
-                if figi in [FIGI_NGH6, FIGI_NGJ6]:
-                    direction = op.get('direction', '')  # OPERATION_DIRECTION_BUY or SELL
+            
+            if not figi and trades:
+                figi = trades[0].get('figi')
+            
+            if figi in [FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
+                price = 0
+                quantity = 1
+                if trades:
+                    trade = trades[0]
                     price = format_price(trade.get('price', {}))
+                    quantity = trade.get('quantity', '1')
+                
+                # Determine direction from operation type
+                if 'Покупка' in op_type:
+                    direction = 'OPERATION_DIRECTION_BUY'
+                elif 'Продажа' in op_type:
+                    direction = 'OPERATION_DIRECTION_SELL'
+                else:
+                    direction = None
+                
+                if direction:
                     new_trades.append({
                         'figi': figi,
                         'direction': direction,
                         'price': price,
-                        'quantity': trade.get('quantity', '1')
+                        'quantity': quantity
                     })
+                    print(f"New trade: {figi} {direction} {quantity} @ {price}")
                     last_operation_ids.add(op_id)
     
     return new_trades
@@ -170,23 +199,29 @@ async def place_counter_order(trade_info):
     figi = trade_info['figi']
     direction = trade_info['direction']
     price = float(trade_info['price'])
+    quantity = int(trade_info['quantity'])
+    
+    offset = OFFSETS.get(figi, 0.010)
     
     # Determine counter direction
     if direction == 'OPERATION_DIRECTION_BUY':
         counter_direction = 'ORDER_DIRECTION_SELL'
-        # Set price lower for sell
-        counter_price = price - 0.010  # 0.010 below
+        counter_price = price + offset
     else:  # SELL
         counter_direction = 'ORDER_DIRECTION_BUY'
-        # Set price higher for buy
-        counter_price = price + 0.010  # 0.010 above
+        counter_price = price - offset
     
-    # Round to 3 decimal places
-    counter_price = round(counter_price, 3)
+    # Round appropriately
+    if figi.startswith('FUT'):
+        counter_price = round(counter_price, 3)
+    else:
+        counter_price = round(counter_price, 2)
     
-    print(f"Placing counter-order: {figi} {counter_direction} at {counter_price}")
+    print(f"Placing counter-order: {figi} {counter_direction} {quantity} @ {counter_price}")
     
-    result = await post_order(figi, 1, counter_price)
+    result = await post_order(figi, quantity, counter_direction, counter_price)
+    print(f"Order result: {result}")
+    return result
     print(f"Order result: {result}")
     return result
 
@@ -201,7 +236,7 @@ async def print_status():
     print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ===")
     
     # Get prices
-    prices = await get_prices([FIGI_NGH6, FIGI_NGJ6])
+    prices = await get_prices([FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR])
     ngh6_price = 'N/A'
     ngj6_price = 'N/A'
     
