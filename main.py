@@ -312,6 +312,12 @@ async def main():
     while True:
         try:
             await asyncio.sleep(10)
+            
+            # Check for new trades and place counter-orders
+            new_trades = await check_new_trades()
+            for trade in new_trades:
+                await place_counter_order(trade)
+            
             await print_status()
         except KeyboardInterrupt:
             print("\nStopping...")
