@@ -167,13 +167,6 @@ async def check_new_trades():
                 figi = trades[0].get('figi')
             
             if figi in [FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
-                price = 0
-                quantity = 1
-                if trades:
-                    trade = trades[0]
-                    price = format_price(trade.get('price', {}))
-                    quantity = trade.get('quantity', '1')
-                
                 # Determine direction from operation type
                 if 'Покупка' in op_type:
                     direction = 'OPERATION_DIRECTION_BUY'
@@ -183,13 +176,19 @@ async def check_new_trades():
                     direction = None
                 
                 if direction:
-                    new_trades.append({
-                        'figi': figi,
-                        'direction': direction,
-                        'price': price,
-                        'quantity': quantity
-                    })
-                    print(f"New trade: {figi} {direction} {quantity} @ {price}")
+                    # Process each trade in the operation
+                    for trade in trades:
+                        price = format_price(trade.get('price', {}))
+                        quantity = trade.get('quantity', '1')
+                        new_trades.append({
+                            'figi': figi,
+                            'direction': direction,
+                            'price': price,
+                            'quantity': quantity
+                        })
+                        print(f"New trade: {figi} {direction} {quantity} @ {price}")
+                    
+                    # Mark operation as processed after all trades
                     last_operation_ids.add(op_id)
     
     return new_trades
