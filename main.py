@@ -237,32 +237,18 @@ async def print_status():
     print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ===")
     
     # Get prices
-    prices = await get_prices([FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR, FIGI_IMOEXF])
+    prices = await get_prices([FIGI_NRH6])
     nrh6_price = 'N/A'
-    ngh6_price = 'N/A'
-    ngj6_price = 'N/A'
     
     for p in prices:
         if p.get('figi') == FIGI_NRH6:
             nrh6_price = format_price(p.get('price', {}))
-        elif p.get('figi') == FIGI_NGH6:
-            ngh6_price = format_price(p.get('price', {}))
-        elif p.get('figi') == FIGI_NGJ6:
-            ngj6_price = format_price(p.get('price', {}))
     
-    try:
-        diff = float(ngh6_price) - float(ngj6_price)
-        diff_str = f"+{diff:.3f}" if diff >= 0 else f"{diff:.3f}"
-    except:
-        diff_str = 'N/A'
-    
-    print(f"NRH6: {nrh6_price} | NGH6: {ngh6_price} | NGJ6: {ngj6_price} | Diff: {diff_str}")
+    print(f"NRH6: {nrh6_price}")
     
     # Get positions
     positions = await get_positions()
     nrh6_qty = 0
-    ngh6_qty = 0
-    ngj6_qty = 0
     
     for pos in positions:
         figi = pos.get('figi', '')
@@ -272,21 +258,79 @@ async def print_status():
         
         if figi == FIGI_NRH6:
             nrh6_qty = total
-        elif figi == FIGI_NGH6:
-            ngh6_qty = total
-        elif figi == FIGI_NGJ6:
-            ngj6_qty = total
     
-    print(f"Positions - NRH6: {nrh6_qty} | NGH6: {ngh6_qty} | NGJ6: {ngj6_qty}")
+    print(f"Positions - NRH6: {nrh6_qty}")
+
+
+async def balance_strategy():
+    """Стратегия удержания позиции NRH6 в диапазоне [-1, -201]"""
+    print(f"\n=== {datetime.now().strftime('%H:%M:%S')} === Balance Strategy")
     
-    # Get orders
-    orders = await get_orders()
-    print(f"Active orders: {len(orders)}")
-    for order in orders:
-        figi = order.get('figi', '')
-        direction = order.get('direction', '')
-        qty = order.get('quantity', '')
-        print(f"  - {figi} {direction} {qty}")
+    # Получаем цену NRH6
+    prices = await get_prices([FIGI_NRH6])
+    nrh6_price = None
+    for p in prices:
+        if p.get('figi') == FIGI_NRH6:
+            nrh6_price = float(format_price(p.get('price', {})))
+    
+    if not nrh6_price:
+        print("Не удалось получить цену NRH6")
+        return
+    
+    # Получаем позицию NRH6
+    positions = await get_positions()
+    nrh6_qty = 0
+    for pos in positions:
+        if pos.get('figi') == FIGI_NRH6:
+            balance = int(pos.get('balance', 0))
+            blocked = int(pos.get('blocked', 0))
+            nrh6_qty = balance + blocked
+    
+    print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
+    
+    # Диапазон: от -1 до -201
+    min_pos = -1
+    max_pos = -201
+    step = 0.005
+    lots_per_order = 5
+    
+    # Вычисляем сколько можем купить (не выйти за -1)
+    can_buy = max(0, min_pos - nrh6_qty)
+    # Вычисляем сколько можем продать (не выйти за -201)
+    can_sell = max(0, nrh6_qty - max_pos)
+    
+    print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
+    
+    # Выставляем заявки на покупку
+    if can_buy > 0:
+        levels_buy = can_buy // lots_per_order + (1 if can_buy % lots_per_order > 0 else 0)
+        for i in range(min(levels_buy, 40)):  # максимум 40 уровней
+            price = nrh6_price - step * (i + 1)
+            qty = lots_per_order
+            if i == levels_buy - 1 and can_buy % lots_per_order > 0:
+                qty = can_buy % lots_per_order
+            if qty <= 0:
+                break
+            price = round(price, 3)
+            print(f"Выставляю покупку: {qty} @ {price}")
+            result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
+            print(f"Результат: {result.get('orderId', result)}")
+    
+    # Выставляем заявки на продажу
+    if can_sell > 0:
+        levels_sell = can_sell // lots_per_order + (1 if can_sell % lots_per_order > 0 else 0)
+        for i in range(min(levels_sell, 40)):  # максимум 40 уровней
+            price = nrh6_price + step * (i + 1)
+            qty = lots_per_order
+            if i == levels_sell - 1 and can_sell % lots_per_order > 0:
+                qty = can_sell % lots_per_order
+            if qty <= 0:
+                break
+            price = round(price, 3)
+            print(f"Выставляю продажу: {qty} @ {price}")
+            result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
+            print(f"Результат: {result.get('orderId', result)}")
+
 
 async def main():
     global ACCOUNT_ID
@@ -300,15 +344,19 @@ async def main():
     # Print initial status
     await print_status()
     
+    # Счётчик для балансной стратегии (каждые 2 минуты = 12 циклов по 10 сек)
+    balance_counter = 0
+    
     # Poll every 10 seconds
     while True:
         try:
             await asyncio.sleep(10)
+            balance_counter += 1
             
-            # Check for new trades and place counter-orders
-            new_trades = await check_new_trades()
-            for trade in new_trades:
-                await place_counter_order(trade)
+            # Балансная стратегия каждые 2 минуты (12 * 10 = 120 сек)
+            if balance_counter >= 12:
+                balance_counter = 0
+                await balance_strategy()
             
             await print_status()
         except KeyboardInterrupt:
