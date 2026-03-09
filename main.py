@@ -88,6 +88,20 @@ async def get_orders():
             data = await resp.json()
             return data.get('orders', [])
 
+async def cancel_order(order_id):
+    """Cancel an order"""
+    global ACCOUNT_ID
+    if not ACCOUNT_ID:
+        await get_account_id()
+    
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/CancelOrder'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={'accountId': ACCOUNT_ID, 'orderId': order_id}, headers=headers) as resp:
+            return await resp.json()
+
 async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TYPE_LIMIT'):
     global ACCOUNT_ID
     if not ACCOUNT_ID:
@@ -265,6 +279,15 @@ async def print_status():
 async def balance_strategy():
     """Стратегия удержания позиции NRH6 в диапазоне [-1, -201]"""
     print(f"\n=== {datetime.now().strftime('%H:%M:%S')} === Balance Strategy")
+    
+    # Отменяем все существующие заявки для NRH6
+    orders = await get_orders()
+    for order in orders:
+        if order.get('figi') == FIGI_NRH6:
+            order_id = order.get('orderId')
+            print(f"Отменяю заявку {order_id}")
+            result = await cancel_order(order_id)
+            print(f"Результат отмены: {result}")
     
     # Получаем цену NRH6
     prices = await get_prices([FIGI_NRH6])
