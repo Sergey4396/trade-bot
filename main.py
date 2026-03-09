@@ -315,7 +315,7 @@ async def balance_strategy():
     min_pos = -1
     max_pos = -201
     step = 0.005
-    lots_per_order = 5
+    first_lot = 5  # первая заявка - 5 лотов
     
     # Вычисляем сколько можем купить (не выйти за -1)
     can_buy = max(0, min_pos - nrh6_qty)
@@ -324,35 +324,41 @@ async def balance_strategy():
     
     print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
     
-    # Выставляем заявки на покупку
+    # Выставляем заявки на покупку (5, 6, 7, ...)
     if can_buy > 0:
-        levels_buy = can_buy // lots_per_order + (1 if can_buy % lots_per_order > 0 else 0)
-        for i in range(min(levels_buy, 40)):  # максимум 40 уровней
-            price = nrh6_price - step * (i + 1)
-            qty = lots_per_order
-            if i == levels_buy - 1 and can_buy % lots_per_order > 0:
-                qty = can_buy % lots_per_order
-            if qty <= 0:
-                break
+        remaining = can_buy
+        level = 0
+        while remaining > 0:
+            qty = first_lot + level  # 5, 6, 7, ...
+            if qty > remaining:
+                qty = remaining
+            price = nrh6_price - step * (level + 1)
             price = round(price, 3)
             print(f"Выставляю покупку: {qty} @ {price}")
             result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
             print(f"Результат: {result.get('orderId', result)}")
-    
-    # Выставляем заявки на продажу
-    if can_sell > 0:
-        levels_sell = can_sell // lots_per_order + (1 if can_sell % lots_per_order > 0 else 0)
-        for i in range(min(levels_sell, 40)):  # максимум 40 уровней
-            price = nrh6_price + step * (i + 1)
-            qty = lots_per_order
-            if i == levels_sell - 1 and can_sell % lots_per_order > 0:
-                qty = can_sell % lots_per_order
-            if qty <= 0:
+            remaining -= qty
+            level += 1
+            if level >= 40:  # максимум 40 уровней
                 break
+    
+    # Выставляем заявки на продажу (5, 6, 7, ...)
+    if can_sell > 0:
+        remaining = can_sell
+        level = 0
+        while remaining > 0:
+            qty = first_lot + level  # 5, 6, 7, ...
+            if qty > remaining:
+                qty = remaining
+            price = nrh6_price + step * (level + 1)
             price = round(price, 3)
             print(f"Выставляю продажу: {qty} @ {price}")
             result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
             print(f"Результат: {result.get('orderId', result)}")
+            remaining -= qty
+            level += 1
+            if level >= 40:  # максимум 40 уровней
+                break
 
 
 async def main():
@@ -377,7 +383,7 @@ async def main():
             balance_counter += 1
             
             # Балансная стратегия каждые 2 минуты (12 * 10 = 120 сек)
-            if balance_counter >= 12:
+            if balance_counter >= 30:  # 5 минут = 30 * 10 сек
                 balance_counter = 0
                 await balance_strategy()
             
