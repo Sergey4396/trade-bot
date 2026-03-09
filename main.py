@@ -24,12 +24,14 @@ FIGI_NRH6 = 'FUTNGM032600'
 FIGI_NGH6 = 'FUTNG0326000'
 FIGI_NGJ6 = 'FUTNG0426000'
 FIGI_VTBR = 'BBG004730ZJ9'
+FIGI_IMOEXF = 'FUTIMOEXF000'
 
 OFFSETS = {
     FIGI_NRH6: 0.010,   # NRH6: ±0.010
     FIGI_NGH6: 0.025,   # NGH6: ±0.025
     FIGI_NGJ6: 0.010,   # NGJ6: ±0.010
     FIGI_VTBR: 0.40,    # VTBR: ±0.40
+    FIGI_IMOEXF: 7.0,   # IMOEXF: ±7.0
 }
 
 async def get_account_id():
@@ -166,7 +168,7 @@ async def check_new_trades():
             if not figi and trades:
                 figi = trades[0].get('figi')
             
-            if figi in [FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR]:
+            if figi in [FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR, FIGI_IMOEXF]:
                 # Determine direction from operation type
                 if 'Покупка' in op_type:
                     direction = 'OPERATION_DIRECTION_BUY'
@@ -235,7 +237,7 @@ async def print_status():
     print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ===")
     
     # Get prices
-    prices = await get_prices([FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR])
+    prices = await get_prices([FIGI_NRH6, FIGI_NGH6, FIGI_NGJ6, FIGI_VTBR, FIGI_IMOEXF])
     nrh6_price = 'N/A'
     ngh6_price = 'N/A'
     ngj6_price = 'N/A'
