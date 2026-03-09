@@ -157,15 +157,6 @@ async def check_new_trades():
     now = datetime.now()
     operations = await get_operations(now - timedelta(seconds=60), now)
     
-    # Debug: print operations with FUTNGM (NRH6)
-    for op in operations[:3]:
-        figi = op.get('figi')
-        trades = op.get('trades', [])
-        if not figi and trades:
-            figi = trades[0].get('figi')
-        if figi and 'NGM' in figi:
-            print(f"DEBUG NRH6: id={op.get('id')}, type={op.get('type')}, figi={figi}")
-    
     new_trades = []
     for op in operations:
         op_id = op.get('id')
