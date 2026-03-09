@@ -311,9 +311,9 @@ async def balance_strategy():
     
     print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
     
-    # Диапазон: от -1 до -201
+    # Диапазон: от -1 до -601
     min_pos = -1
-    max_pos = -201
+    max_pos = -601
     step = 0.003
     first_lot = 5  # первая заявка - 5 лотов
     
