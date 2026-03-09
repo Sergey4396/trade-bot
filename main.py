@@ -157,16 +157,6 @@ async def check_new_trades():
     now = datetime.now()
     operations = await get_operations(now - timedelta(seconds=30), now)
     
-    # Debug: show all operations with trades
-    for op in operations:
-        figi = op.get('figi')
-        trades = op.get('trades', [])
-        if not figi and trades:
-            figi = trades[0].get('figi')
-        if figi and 'NGM' in figi:
-            op_type = op.get('type', '')
-            print(f"DEBUG: id={op.get('id')}, type={op_type}, figi={figi}, in_set={op.get('id') in last_operation_ids}")
-    
     new_trades = []
     for op in operations:
         op_id = op.get('id')
