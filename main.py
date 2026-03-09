@@ -155,7 +155,7 @@ async def check_new_trades():
     
     from datetime import timedelta
     now = datetime.now()
-    operations = await get_operations(now - timedelta(seconds=60), now)
+    operations = await get_operations(now - timedelta(seconds=30), now)
     
     new_trades = []
     for op in operations:
