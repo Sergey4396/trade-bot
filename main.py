@@ -335,8 +335,14 @@ async def balance_strategy():
             price = nrh6_price - step * (level + 1)
             price = round(price, 3)
             print(f"Выставляю покупку: {qty} @ {price}")
-            result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
-            print(f"Результат: {result.get('orderId', result)}")
+            try:
+                result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
+                if 'orderId' in result:
+                    print(f"Результат: {result.get('orderId')}")
+                else:
+                    print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+            except Exception as e:
+                print(f"Исключение (пропускаю): {str(e)[:50]}")
             remaining -= qty
             level += 1
             if level >= 40:  # максимум 40 уровней
@@ -353,8 +359,14 @@ async def balance_strategy():
             price = nrh6_price + step * (level + 1)
             price = round(price, 3)
             print(f"Выставляю продажу: {qty} @ {price}")
-            result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
-            print(f"Результат: {result.get('orderId', result)}")
+            try:
+                result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
+                if 'orderId' in result:
+                    print(f"Результат: {result.get('orderId')}")
+                else:
+                    print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+            except Exception as e:
+                print(f"Исключение (пропускаю): {str(e)[:50]}")
             remaining -= qty
             level += 1
             if level >= 40:  # максимум 40 уровней
