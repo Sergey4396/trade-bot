@@ -303,14 +303,6 @@ async def balance_strategy():
         last_balance_time = now
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
         
-        # ... rest of the function ...
-        
-        print("Балансная стратегия завершена")
-        
-    finally:
-        balance_running = False
-    
-    try:
         # Отменяем все существующие заявки для NRH6
         orders = await get_orders()
         nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
@@ -423,29 +415,99 @@ async def balance_strategy():
     except Exception as e:
         print(f"Ошибка в балансной стратегии: {e}")
     
-    # Выставляем заявки на продажу (5, 6, 7, ...)
-    if can_sell > 0:
-        remaining = can_sell
-        level = 0
-        while remaining > 0:
-            qty = first_lot + level  # 5, 6, 7, ...
-            if qty > remaining:
-                qty = remaining
-            price = nrh6_price + step * (level + 1)
-            price = round(price, 3)
-            print(f"Выставляю продажу: {qty} @ {price}")
-            try:
-                result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
-                if 'orderId' in result:
-                    print(f"Результат: {result.get('orderId')}")
-                else:
-                    print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
-            except Exception as e:
-                print(f"Исключение (пропускаю): {str(e)[:50]}")
-            remaining -= qty
-            level += 1
-            if level >= 40:  # максимум 40 уровней
-                break
+    finally:
+        balance_running = False
+        
+        # Получаем цену NRH6
+        prices = await get_prices([FIGI_NRH6])
+        nrh6_price = None
+        for p in prices:
+            if p.get('figi') == FIGI_NRH6:
+                nrh6_price = float(format_price(p.get('price', {})))
+        
+        if not nrh6_price:
+            print("Не удалось получить цену NRH6")
+            return
+        
+        # Получаем позицию NRH6
+        positions = await get_positions()
+        nrh6_qty = 0
+        for pos in positions:
+            if pos.get('figi') == FIGI_NRH6:
+                balance = int(pos.get('balance', 0))
+                blocked = int(pos.get('blocked', 0))
+                nrh6_qty = balance + blocked
+        
+        print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
+        
+        # Диапазон: от -1 до -1201
+        min_pos = -1
+        max_pos = -1201
+        step = 0.003
+        first_lot = 10  # первая заявка - 10 лотов
+        
+        # Вычисляем сколько можем купить (не выйти за -1)
+        can_buy = max(0, min_pos - nrh6_qty)
+        # Вычисляем сколько можем продать (не выйти за -1201)
+        can_sell = max(0, nrh6_qty - max_pos)
+        
+        print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
+        
+        # Выставляем заявки на покупку (10, 11, 12, ...)
+        if can_buy > 0:
+            remaining = can_buy
+            level = 0
+            while remaining > 0:
+                qty = first_lot + level  # 10, 11, 12, ...
+                if qty > remaining:
+                    qty = remaining
+                price = nrh6_price - step * (level + 1)
+                price = round(price, 3)
+                print(f"Выставляю покупку: {qty} @ {price}")
+                try:
+                    result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
+                    if 'orderId' in result:
+                        print(f"Результат: {result.get('orderId')}")
+                    else:
+                        print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+                except Exception as e:
+                    print(f"Исключение (пропускаю): {str(e)[:50]}")
+                remaining -= qty
+                level += 1
+                if level >= 40:  # максимум 40 уровней
+                    break
+        
+        # Выставляем заявки на продажу (10, 11, 12, ...)
+        if can_sell > 0:
+            remaining = can_sell
+            level = 0
+            while remaining > 0:
+                qty = first_lot + level  # 10, 11, 12, ...
+                if qty > remaining:
+                    qty = remaining
+                price = nrh6_price + step * (level + 1)
+                price = round(price, 3)
+                print(f"Выставляю продажу: {qty} @ {price}")
+                try:
+                    result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
+                    if 'orderId' in result:
+                        print(f"Результат: {result.get('orderId')}")
+                    else:
+                        print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+                except Exception as e:
+                    print(f"Исключение (пропускаю): {str(e)[:50]}")
+                remaining -= qty
+                level += 1
+                if level >= 40:  # максимум 40 уровней
+                    break
+        
+        print("Балансная стратегия завершена")
+        
+    except Exception as e:
+        print(f"Ошибка в балансной стратегии: {e}")
+    
+    finally:
+        balance_running = False
 
 
 async def main():
