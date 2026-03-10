@@ -353,7 +353,7 @@ async def balance_strategy():
         min_pos = -1
         max_pos = -1201
         step = 0.003
-        first_lot = 10  # первая заявка - 10 лотов
+        first_lot = 1  # первая заявка - 1 лотов
         
         # Вычисляем сколько можем купить (не выйти за -1)
         can_buy = max(0, min_pos - nrh6_qty)
