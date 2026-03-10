@@ -439,9 +439,9 @@ async def main():
             await asyncio.sleep(10)
             balance_counter += 1
             
-            # Балансная стратегия сразу при запуске + каждые 5 минут
+            # Балансная стратегия при запуске (counter=1) + каждые 5 минут (>=30)
             if balance_counter == 1 or balance_counter >= 30:
-                balance_counter = 1
+                balance_counter = 0  # сбрасываем после выполнения
                 await balance_strategy()
             
             await print_status()
