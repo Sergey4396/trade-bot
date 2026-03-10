@@ -242,9 +242,10 @@ def format_price(price_dict):
     """Format price from units/nano"""
     units = price_dict.get('units', 0)
     nano = price_dict.get('nano', 0)
-    # nano is in nanounits, so divide by 100000000 to get 3 decimal places
-    nano_part = nano // 100000000
-    return f"{units}.{str(nano_part).zfill(3)}"
+    # nano is in nanounits (10^-9), divide by 10^6 to get 3 decimal places
+    # e.g., 3.091 has nano=91000000, 3.910 has nano=910000000
+    first_three = nano // 1000000
+    return f"{units}.{str(first_three).zfill(3)}"
 
 async def print_status():
     """Print current status"""
