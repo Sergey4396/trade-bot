@@ -311,11 +311,11 @@ async def balance_strategy():
     
     print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
     
-    # Диапазон: от -1 до -601
+    # Диапазон: от -1 до -1201
     min_pos = -1
-    max_pos = -601
+    max_pos = -1201
     step = 0.003
-    first_lot = 5  # первая заявка - 5 лотов
+    first_lot = 10  # первая заявка - 10 лотов
     
     # Вычисляем сколько можем купить (не выйти за -1)
     can_buy = max(0, min_pos - nrh6_qty)
@@ -394,9 +394,9 @@ async def main():
             await asyncio.sleep(10)
             balance_counter += 1
             
-            # Балансная стратегия каждые 2 минуты (12 * 10 = 120 сек)
-            if balance_counter >= 30:  # 5 минут = 30 * 10 сек
-                balance_counter = 0
+            # Балансная стратегия сразу при запуске + каждые 5 минут
+            if balance_counter == 1 or balance_counter >= 30:
+                balance_counter = 1
                 await balance_strategy()
             
             await print_status()
