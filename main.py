@@ -297,6 +297,7 @@ async def balance_strategy():
         return
     
     balance_running = True
+    orders_placed = False
     
     try:
         now = datetime.now()
@@ -377,6 +378,7 @@ async def balance_strategy():
                     result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result:
                         print(f"Результат: {result.get('orderId')}")
+                        orders_placed = True
                     else:
                         print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
                 except Exception as e:
@@ -401,6 +403,7 @@ async def balance_strategy():
                     result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result:
                         print(f"Результат: {result.get('orderId')}")
+                        orders_placed = True
                     else:
                         print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
                 except Exception as e:
@@ -416,7 +419,11 @@ async def balance_strategy():
         print(f"Ошибка в балансной стратегии: {e}")
     
     finally:
-        last_balance_time = datetime.now()
+        if orders_placed:
+            last_balance_time = datetime.now()
+            print(f"Заявки выставлены, таймер обновлён")
+        else:
+            print(f"Заявки НЕ выставлены, таймер НЕ обновлён - повтор через 10 сек")
         balance_running = False
 
 
