@@ -240,9 +240,11 @@ async def place_counter_order(trade_info):
 
 def format_price(price_dict):
     """Format price from units/nano"""
-    units = price_dict.get('units', '0')
+    units = price_dict.get('units', 0)
     nano = price_dict.get('nano', 0)
-    return f"{units}.{str(nano)[:3].ljust(3, '0')}"
+    # nano is in nanounits, so divide by 100000000 to get 3 decimal places
+    nano_part = nano // 100000000
+    return f"{units}.{str(nano_part).zfill(3)}"
 
 async def print_status():
     """Print current status"""
