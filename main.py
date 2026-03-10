@@ -237,8 +237,6 @@ async def place_counter_order(trade_info):
     result = await post_order(figi, quantity, counter_direction, counter_price)
     print(f"Order result: {result}")
     return result
-    print(f"Order result: {result}")
-    return result
 
 def format_price(price_dict):
     """Format price from units/nano"""
@@ -300,7 +298,6 @@ async def balance_strategy():
             print(f"Балансная стратегия пропущена, прошло только {(now - last_balance_time).total_seconds():.0f} сек")
             return
         
-        last_balance_time = now
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
         
         # Отменяем все существующие заявки для NRH6
@@ -416,6 +413,7 @@ async def balance_strategy():
         print(f"Ошибка в балансной стратегии: {e}")
     
     finally:
+        last_balance_time = datetime.now()
         balance_running = False
 
 
