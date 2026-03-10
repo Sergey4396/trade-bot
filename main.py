@@ -291,8 +291,8 @@ async def balance_strategy():
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    # Проверяем когда последний раз запускали (минимум 5 минут назад)
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 300:
+    # Проверяем когда последний раз запускали (минимум 10 минут назад)
+    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
         print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
     
@@ -353,7 +353,7 @@ async def balance_strategy():
         min_pos = -1
         max_pos = -1201
         step = 0.003
-        first_lot = 1  # первая заявка - 1 лотов
+        first_lot = 10  # первая заявка - 10 лотов
         
         # Вычисляем сколько можем купить (не выйти за -1)
         can_buy = max(0, min_pos - nrh6_qty)
