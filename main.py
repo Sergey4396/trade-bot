@@ -278,21 +278,37 @@ async def print_status():
 
 # Track last balance strategy run time
 last_balance_time = None
+balance_running = False
 
 async def balance_strategy():
     """Стратегия удержания позиции NRH6 в диапазоне [-1, -201]"""
-    global last_balance_time
+    global last_balance_time, balance_running
     from datetime import datetime, timedelta
     
-    now = datetime.now()
-    
-    # Проверяем когда последний раз запускали (минимум 4 минуты назад)
-    if last_balance_time and (now - last_balance_time).total_seconds() < 240:
-        print(f"Балансная стратегия пропущена, прошло только {(now - last_balance_time).total_seconds():.0f} сек")
+    # Блокировка - не запускаем если уже работает
+    if balance_running:
+        print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    last_balance_time = now
-    print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy (last run: {last_balance_time})")
+    balance_running = True
+    
+    try:
+        now = datetime.now()
+        
+        # Проверяем когда последний раз запускали (минимум 4 минуты назад)
+        if last_balance_time and (now - last_balance_time).total_seconds() < 240:
+            print(f"Балансная стратегия пропущена, прошло только {(now - last_balance_time).total_seconds():.0f} сек")
+            return
+        
+        last_balance_time = now
+        print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
+        
+        # ... rest of the function ...
+        
+        print("Балансная стратегия завершена")
+        
+    finally:
+        balance_running = False
     
     try:
         # Отменяем все существующие заявки для NRH6
