@@ -276,9 +276,23 @@ async def print_status():
     print(f"Positions - NRH6: {nrh6_qty}")
 
 
+# Track last balance strategy run time
+last_balance_time = None
+
 async def balance_strategy():
     """Стратегия удержания позиции NRH6 в диапазоне [-1, -201]"""
-    print(f"\n=== {datetime.now().strftime('%H:%M:%S')} === Balance Strategy")
+    global last_balance_time
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    
+    # Проверяем когда последний раз запускали (минимум 4 минуты назад)
+    if last_balance_time and (now - last_balance_time).total_seconds() < 240:
+        print(f"Балансная стратегия пропущена, прошло только {(now - last_balance_time).total_seconds():.0f} сек")
+        return
+    
+    last_balance_time = now
+    print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy (last run: {last_balance_time})")
     
     try:
         # Отменяем все существующие заявки для NRH6
@@ -430,19 +444,16 @@ async def main():
     # Print initial status
     await print_status()
     
-    # Счётчик для балансной стратегии (каждые 2 минуты = 12 циклов по 10 сек)
-    balance_counter = 0
+    # Запускаем балансную стратегию сразу при старте
+    await balance_strategy()
     
     # Poll every 10 seconds
     while True:
         try:
             await asyncio.sleep(10)
-            balance_counter += 1
             
-            # Балансная стратегия при запуске (counter=1) + каждые 5 минут (>=30)
-            if balance_counter == 1 or balance_counter >= 30:
-                balance_counter = 0  # сбрасываем после выполнения
-                await balance_strategy()
+            # Балансная стратегия каждые 5 минут
+            await balance_strategy()
             
             await print_status()
         except KeyboardInterrupt:
