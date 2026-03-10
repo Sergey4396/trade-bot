@@ -283,13 +283,20 @@ async def balance_strategy():
     try:
         # Отменяем все существующие заявки для NRH6
         orders = await get_orders()
+        cancelled = 0
         for order in orders:
             if order.get('figi') == FIGI_NRH6:
                 order_id = order.get('orderId')
                 print(f"Отменяю заявку {order_id}")
                 result = await cancel_order(order_id)
+                cancelled += 1
         
-        print("Отменены все заявки, получаю цену...")
+        # Ждём чтобы отмены успели обработаться
+        if cancelled > 0:
+            print(f"Отменено {cancelled} заявок, жду 3 секунды...")
+            await asyncio.sleep(3)
+        
+        print("Получаю цену...")
         
         # Получаем цену NRH6
         prices = await get_prices([FIGI_NRH6])
