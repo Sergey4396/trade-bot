@@ -18,6 +18,8 @@ OFFSET = 0.024
 TRADED_ORDERS = {}
 ACCOUNT_ID = None
 
+SYMBOL = os.environ.get('FINAM_SYMBOL', 'NRH6@MOEX')
+
 
 async def get_account_id(jwt_token):
     """Get account ID"""
@@ -131,12 +133,12 @@ async def subscribe_orders(ws, token):
         "action": "SUBSCRIBE",
         "type": "TRADES",
         "data": {
-            "symbol": "NRH6@RTSX"
+            "symbol": SYMBOL
         },
         "token": token
     }
     await ws.send(json.dumps(subscribe_msg))
-    print("Подписка на TRADES оформлена")
+    print(f"Подписка на TRADES оформлена: {SYMBOL}")
 
 
 async def websocket_listener():
