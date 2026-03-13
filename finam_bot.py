@@ -176,9 +176,6 @@ async def websocket_listener():
                 
                 async for message in ws:
                     try:
-                        # Send ping every 30 seconds to keep connection alive
-                        await ws.ping()
-                        
                         data = json.loads(message)
                         msg_type = data.get('type', '')
                         
@@ -221,6 +218,8 @@ async def websocket_listener():
                     except json.JSONDecodeError:
                         continue
                     except Exception as e:
+                        if '1000 (OK)' in str(e):
+                            continue
                         print(f"Ошибка обработки: {e}")
                         
         except websockets.exceptions.ConnectionClosed as e:
