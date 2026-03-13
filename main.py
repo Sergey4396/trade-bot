@@ -70,6 +70,27 @@ async def get_futures_prices(figi_list):
             data = await resp.json()
             return data.get('lastPrices', [])
 
+async def get_futures_price_by_figi(figi):
+    """Get futures price using GetTradingStatus and GetOrderBook"""
+    # Try GetOrderBook first - it returns best prices
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={'figi': figi, 'depth': 1}, headers=headers) as resp:
+            data = await resp.json()
+            print(f"DEBUG: GetOrderBook response: {data}")
+            # Get best bid and ask
+            bids = data.get('bids', [])
+            asks = data.get('asks', [])
+            if bids and asks:
+                # Use mid price
+                bid_price = float(format_price(bids[0].get('price', {})))
+                ask_price = float(format_price(asks[0].get('price', {})))
+                return (bid_price + ask_price) / 2
+            return None
+
 async def get_positions():
     global ACCOUNT_ID
     if not ACCOUNT_ID:
@@ -336,25 +357,12 @@ async def balance_strategy():
             print("Жду 3 секунды...")
             await asyncio.sleep(3)
         
-        prices = await get_prices([FIGI_NRH6])
-        print(f"DEBUG: get_prices returned: {prices}")
-        nrh6_price = None
-        for p in prices:
-            if p.get('figi') == FIGI_NRH6:
-                nrh6_price = float(format_price(p.get('price', {})))
+        # Пробуем получить цену через GetOrderBook
+        nrh6_price = await get_futures_price_by_figi(FIGI_NRH6)
         
         if not nrh6_price:
-            print("Не удалось получить цену NRH6")
-            # Пробуем получить цену через GetLastPricesAsync для фьючерсов
-            print("Пробую альтернативный метод...")
-            alt_prices = await get_futures_prices([FIGI_NRH6])
-            print(f"DEBUG: alt prices: {alt_prices}")
-            if alt_prices:
-                for p in alt_prices:
-                    if p.get('figi') == FIGI_NRH6:
-                        nrh6_price = float(format_price(p.get('price', {})))
-            if not nrh6_price:
-                return
+            print("Не удалось получить цену NRH6 через GetOrderBook")
+            return
         
         positions = await get_positions()
         nrh6_qty = 0
