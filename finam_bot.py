@@ -29,7 +29,7 @@ async def get_account_id(jwt_token):
     if ACCOUNT_ID:
         return ACCOUNT_ID
     
-    url = f'{REST_URL}/v1/accounts'
+    url = f'{REST_URL}/v1/portfolios'
     headers = {
         'Authorization': f'Bearer {jwt_token}',
         'User-Agent': 'FinamBot/1.0'
@@ -39,6 +39,7 @@ async def get_account_id(jwt_token):
         async with session.get(url, headers=headers) as resp:
             if resp.status == 200:
                 data = await resp.json()
+                print(f"Portfolios response: {data}")
                 accounts = data.get('accounts', [])
                 if accounts:
                     ACCOUNT_ID = accounts[0].get('account_id')
@@ -46,6 +47,8 @@ async def get_account_id(jwt_token):
                     return ACCOUNT_ID
             else:
                 print(f"Ошибка получения аккаунта: {resp.status}")
+                text = await resp.text()
+                print(f"Response: {text}")
     return None
 
 
