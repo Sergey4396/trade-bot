@@ -447,9 +447,15 @@ async def balance_strategy():
         last_trade_price = await get_last_trade_price(FIGI_NRH6)
         if last_trade_price:
             last_executed_price = last_trade_price
-            print(f"Последняя сделка по цене: {last_executed_price}")
-        
-        skip_price = last_executed_price
+            # Находим ближайшую кратную цену
+            skip_price_lower = round(last_executed_price - (last_executed_price % step), 3)
+            skip_price_upper = skip_price_lower + step
+            # Берем ту, которая ближе к последней сделке
+            if abs(last_executed_price - skip_price_lower) < abs(last_executed_price - skip_price_upper):
+                skip_price = skip_price_lower
+            else:
+                skip_price = skip_price_upper
+            print(f"Последняя сделка по цене: {last_executed_price}, пропускаем: {skip_price}")
         
         # Выставляем заявки на покупку от base_price_lower вниз
         # Пропускаем заявку по последней исполненной цене
