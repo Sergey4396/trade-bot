@@ -418,12 +418,6 @@ async def balance_strategy():
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
         
-        # Получаем цену последней исполненной сделки
-        last_trade_price = await get_last_trade_price(FIGI_NRH6)
-        if last_trade_price:
-            last_executed_price = last_trade_price
-            print(f"Последняя сделка по цене: {last_executed_price}")
-        
         # Диапазон: от 1 до 60
         min_pos = 1
         max_pos = 60
@@ -448,6 +442,14 @@ async def balance_strategy():
         base_price_lower = round(nrh6_price - (nrh6_price % step), 3)
         base_price_upper = base_price_lower + step
         print(f"Ближайшие кратные: {base_price_lower} и {base_price_upper}")
+        
+        # Получаем цену последней исполненной сделки прямо перед выставлением заявок
+        last_trade_price = await get_last_trade_price(FIGI_NRH6)
+        if last_trade_price:
+            last_executed_price = last_trade_price
+            print(f"Последняя сделка по цене: {last_executed_price}")
+        
+        skip_price = last_executed_price
         
         # Выставляем заявки на покупку от base_price_lower вниз
         # Пропускаем заявку по последней исполненной цене
