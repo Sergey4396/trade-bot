@@ -13,7 +13,7 @@ TOKEN = os.environ.get('FINAM_TOKEN', 'YOUR_TOKEN_HERE')
 # Token is already JWT (starts with eyJ...), no need to exchange
 
 WS_URL = 'wss://api.finam.ru:443/ws'
-REST_URL = 'https://api.finam.ru'
+REST_URL = 'https://trade-api.finam.ru'
 
 OFFSET = 0.024
 
