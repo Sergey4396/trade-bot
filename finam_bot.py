@@ -2,7 +2,6 @@
 """
 Finam Trading Bot - Polling version
 """
-import json
 import asyncio
 import aiohttp
 from datetime import datetime, timedelta
@@ -11,32 +10,35 @@ TOKEN = 'eyJraWQiOiJlYzk3YjU2YS01YWZkLTQ5ZGYtYWExOS0zZDQ0YTAxN2M5OGUiLCJ0eXAiOiJ
 ACCOUNT_ID = '1060e31a-5a84-4dc1-b0ca-d1e6b8c427e6'
 
 REST_URL = 'https://api.finam.ru'
+OFFSET = 0.020
+SYMBOL = 'NRH6@MOEX'
+
+TRADED_ORDERS = set()
+
+HEADERS = {
+    'Authorization': f'Bearer {TOKEN}',
+    'Content-Type': 'application/json',
+    'User-Agent': 'FinamBot/1.0'
+}
 
 
 async def get_trades():
-    """Get recent trades"""
     url = f'{REST_URL}/v1/instruments/{SYMBOL}/trades/latest'
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=HEADERS) as resp:
-            print(f"Trades response status: {resp.status}")
+            print(f"Trades status: {resp.status}")
             if resp.status == 200:
                 try:
                     data = await resp.json()
-                    print(f"Trades response: {data}")
                     return data.get('trades', [])
-                except Exception as e:
+                except:
                     text = await resp.text()
-                    print(f"JSON error: {e}, response: {text[:200]}")
-                    return []
-            text = await resp.text()
-            print(f"Ошибка получения сделок: {resp.status} - {text[:200]}")
+                    print(f"Response: {text[:200]}")
             return []
 
 
 async def send_order(quantity, direction, price):
-    """Send order to Finam"""
     url = f'{REST_URL}/v1/accounts/{ACCOUNT_ID}/orders'
-    
     order_data = {
         'symbol': SYMBOL,
         'quantity': str(quantity),
@@ -45,84 +47,65 @@ async def send_order(quantity, direction, price):
         'limit_price': str(price),
         'time_in_force': 'DAY'
     }
-    
-    print(f"Отправляю заявку: {order_data}")
-    
+    print(f"Заявка: {direction} {quantity} @ {price}")
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=order_data, headers=HEADERS) as resp:
             result = await resp.json()
             if resp.status in (200, 201):
-                order_id = result.get('order_id')
-                print(f"Заявка размещена: {order_id}")
-                return order_id
-            else:
-                print(f"Ошибка: {result}")
-                return None
+                print(f"Размещена: {result.get('order_id')}")
+                return result.get('order_id')
+            print(f"Ошибка: {result}")
+            return None
 
 
 async def check_and_trade():
-    """Check for new trades and place counter orders"""
     global TRADED_ORDERS
-    
-    print(f"\n=== {datetime.now().strftime('%H:%M:%S')} === Проверяю сделки...")
+    print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ===")
     
     trades = await get_trades()
-    
     if not trades:
-        print("Нет новых сделок")
+        print("Нет сделок")
         return
-    
-    print(f"Найдено сделок: {len(trades)}")
     
     for trade in trades:
         trade_id = trade.get('trade_id', '')
-        if not trade_id or trade_id in TRADED_ORDERS:
+        if trade_id in TRADED_ORDERS:
             continue
         
         symbol = trade.get('symbol', '')
-        if symbol != SYMBOL:
-            continue
-            
-        price = float(trade.get('price', 0))
-        quantity = int(trade.get('quantity', 0))
+        price = float(trade.get('price', {}).get('value', 0))
+        quantity = float(trade.get('size', {}).get('value', 0))
         side = trade.get('side', '')
         
         if not all([price, quantity, side]):
             continue
         
         TRADED_ORDERS.add(trade_id)
-        
-        # Clean old entries
         if len(TRADED_ORDERS) > 100:
             TRADED_ORDERS = set(list(TRADED_ORDERS)[-50:])
         
-        print(f"\n=== Сделка: {side} {quantity} @ {price} ===")
+        print(f"Сделка: {side} {quantity} @ {price}")
         
-        if side == "BUY":
+        if side == "buy":
             counter_price = round(price + OFFSET, 3)
-            counter_direction = "SELL"
+            counter_direction = "sell"
         else:
             counter_price = round(price - OFFSET, 3)
-            counter_direction = "BUY"
+            counter_direction = "buy"
         
-        print(f"Выставляю встречную заявку: {counter_direction} {quantity} @ {counter_price}")
-        await send_order(quantity, counter_direction, counter_price)
+        await send_order(int(quantity), counter_direction, counter_price)
 
 
 async def main():
-    print("Finam Trading Bot - Polling Version")
-    print(f"Токен: Установлен")
-    print(f"Account ID: {ACCOUNT_ID}")
-    
+    print("Finam Bot - Polling")
     while True:
         try:
             await check_and_trade()
             await asyncio.sleep(5)
         except KeyboardInterrupt:
-            print("\nОстановка...")
             break
         except Exception as e:
-            print(f"Ошибка: {e}")
+            print(f"Error: {e}")
             await asyncio.sleep(5)
 
 
