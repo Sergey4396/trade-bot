@@ -11,19 +11,11 @@ ACCOUNT_ID = '1060e31a-5a84-4dc1-b0ca-d1e6b8c427e6'
 
 REST_URL = 'https://api.finam.ru'
 OFFSET = 0.020
-SYMBOL = 'NRH6@MOEX'
-
-TRADED_ORDERS = set()
-
-HEADERS = {
-    'Authorization': f'Bearer {TOKEN}',
-    'Content-Type': 'application/json',
-    'User-Agent': 'FinamBot/1.0'
-}
+SYMBOL = 'NRH6'
 
 
 async def get_trades():
-    url = f'{REST_URL}/v1/instruments/{SYMBOL}/trades/latest'
+    url = f'{REST_URL}/v1/instruments/NRH6@MOEX/trades/latest'
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=HEADERS) as resp:
             print(f"Trades status: {resp.status}")
