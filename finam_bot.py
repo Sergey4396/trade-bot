@@ -142,8 +142,7 @@ async def subscribe_orders(ws, token):
         "type": "TRADES",
         "data": {
             "symbol": "NRH6@MOEX"
-        },
-        "token": token
+        }
     }
     msg_str = json.dumps(subscribe_msg)
     print(f"Отправляю: {msg_str}")
@@ -169,7 +168,7 @@ async def websocket_listener():
     
     while True:
         try:
-            async with websockets.connect(WS_URL) as ws:
+            async with websockets.connect(WS_URL, additional_headers={'Authorization': f'Bearer {TOKEN}'}) as ws:
                 print("Подключено к Finam")
                 
                 await subscribe_orders(ws, TOKEN)
