@@ -148,7 +148,7 @@ async def subscribe_orders(ws, token):
     msg_str = json.dumps(subscribe_msg)
     print(f"Отправляю: {msg_str}")
     await ws.send(msg_str)
-    print(f"Подписка на TRADES оформлена")
+    print(f"Подписка на ORDERS оформлена")
 
 
 async def websocket_listener():
@@ -176,6 +176,9 @@ async def websocket_listener():
                 
                 async for message in ws:
                     try:
+                        # Send ping every 30 seconds to keep connection alive
+                        await ws.ping()
+                        
                         data = json.loads(message)
                         msg_type = data.get('type', '')
                         
