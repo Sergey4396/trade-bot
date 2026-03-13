@@ -90,8 +90,7 @@ async def subscribe_and_listen(ws):
         "type": "TRADES",
         "data": {
             "symbol": SYMBOL
-        },
-        "token": TOKEN
+        }
     }
     await ws.send(json.dumps(subscribe_msg))
     print(f"Подписка на TRADES оформлена: {json.dumps(subscribe_msg)}")
