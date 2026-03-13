@@ -90,10 +90,11 @@ async def subscribe_and_listen(ws):
         "type": "TRADES",
         "data": {
             "symbol": SYMBOL
-        }
+        },
+        "token": TOKEN
     }
     await ws.send(json.dumps(subscribe_msg))
-    print(f"Подписка на TRADES оформлена")
+    print(f"Подписка на TRADES оформлена: {json.dumps(subscribe_msg)}")
     
     try:
         async for message in ws:
@@ -137,7 +138,7 @@ async def websocket_listener():
     while True:
         try:
             print("Подключаюсь к Finam...")
-            async with websockets.connect(WS_URL, ping_interval=25, ping_timeout=20) as ws:
+            async with websockets.connect(WS_URL, additional_headers={'Authorization': f'Bearer {TOKEN}'}, ping_interval=25, ping_timeout=20) as ws:
                 print("Подключено к Finam")
                 await subscribe_and_listen(ws)
         except websockets.exceptions.ConnectionClosed as e:
