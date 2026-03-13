@@ -87,13 +87,13 @@ async def subscribe_and_listen(ws):
     """Subscribe and listen for messages"""
     subscribe_msg = {
         "action": "SUBSCRIBE",
-        "type": "TRADES",
+        "type": "QUOTES",
         "data": {
             "symbol": SYMBOL
         }
     }
     await ws.send(json.dumps(subscribe_msg))
-    print(f"Подписка на TRADES оформлена: {json.dumps(subscribe_msg)}")
+    print(f"Подписка оформлена")
     
     try:
         async for message in ws:
@@ -126,6 +126,9 @@ async def subscribe_and_listen(ws):
                 if '1000' in str(e) or 'OK' in str(e):
                     continue
                 print(f"Ошибка обработки: {e}")
+            else:
+                # Print all messages for debugging
+                print(f"Получено: {data}")
                 
     except Exception as e:
         print(f"Ошибка в subscribe_and_listen: {e}")
