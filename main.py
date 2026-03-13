@@ -59,6 +59,17 @@ async def get_prices(figi_list):
             data = await resp.json()
             return data.get('lastPrices', [])
 
+async def get_futures_prices(figi_list):
+    """Alternative method for futures prices"""
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPricesAsync'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={'figi': figi_list}, headers=headers) as resp:
+            data = await resp.json()
+            return data.get('lastPrices', [])
+
 async def get_positions():
     global ACCOUNT_ID
     if not ACCOUNT_ID:
@@ -326,6 +337,7 @@ async def balance_strategy():
             await asyncio.sleep(3)
         
         prices = await get_prices([FIGI_NRH6])
+        print(f"DEBUG: get_prices returned: {prices}")
         nrh6_price = None
         for p in prices:
             if p.get('figi') == FIGI_NRH6:
@@ -333,7 +345,16 @@ async def balance_strategy():
         
         if not nrh6_price:
             print("Не удалось получить цену NRH6")
-            return
+            # Пробуем получить цену через GetLastPricesAsync для фьючерсов
+            print("Пробую альтернативный метод...")
+            alt_prices = await get_futures_prices([FIGI_NRH6])
+            print(f"DEBUG: alt prices: {alt_prices}")
+            if alt_prices:
+                for p in alt_prices:
+                    if p.get('figi') == FIGI_NRH6:
+                        nrh6_price = float(format_price(p.get('price', {})))
+            if not nrh6_price:
+                return
         
         positions = await get_positions()
         nrh6_qty = 0
