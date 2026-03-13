@@ -13,7 +13,7 @@ TOKEN = os.environ.get('FINAM_TOKEN', 'YOUR_TOKEN_HERE')
 # Token is already JWT (starts with eyJ...), no need to exchange
 
 WS_URL = 'wss://api.finam.ru:443/ws'
-REST_URL = 'https://trade-api.finam.ru'
+REST_URL = 'https://api.finam.ru'
 
 OFFSET = 0.024
 
@@ -24,31 +24,37 @@ SYMBOL = os.environ.get('FINAM_SYMBOL', 'NRH6@MOEX')
 
 
 async def get_account_id(jwt_token):
-    """Get account ID"""
+    """Get account ID from token details"""
     global ACCOUNT_ID
     if ACCOUNT_ID:
         return ACCOUNT_ID
     
-    url = f'{REST_URL}/v1/portfolios'
+    url = f'{REST_URL}/v1/sessions/details'
     headers = {
         'Authorization': f'Bearer {jwt_token}',
-        'User-Agent': 'FinamBot/1.0'
+        'User-Agent': 'FinamBot/1.0',
+        'Content-Type': 'application/json'
     }
+    data = {'token': jwt_token}
     
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as resp:
+        async with session.post(url, json=data, headers=headers) as resp:
             if resp.status == 200:
-                data = await resp.json()
-                print(f"Portfolios response: {data}")
-                accounts = data.get('accounts', [])
-                if accounts:
-                    ACCOUNT_ID = accounts[0].get('account_id')
-                    print(f"Account ID: {ACCOUNT_ID}")
-                    return ACCOUNT_ID
+                result = await resp.text()
+                print(f"Session details response: {result[:500]}")
+                try:
+                    data = await resp.json()
+                    account_ids = data.get('account_ids', [])
+                    if account_ids:
+                        ACCOUNT_ID = account_ids[0]
+                        print(f"Account ID: {ACCOUNT_ID}")
+                        return ACCOUNT_ID
+                except:
+                    pass
             else:
                 print(f"Ошибка получения аккаунта: {resp.status}")
                 text = await resp.text()
-                print(f"Response: {text}")
+                print(f"Response: {text[:500]}")
     return None
 
 
