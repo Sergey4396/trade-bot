@@ -139,14 +139,15 @@ async def subscribe_orders(ws, token):
     """Subscribe to orders/trades"""
     subscribe_msg = {
         "action": "SUBSCRIBE",
-        "type": "ORDERS",
+        "type": "QUOTES",
         "data": {
-            "symbol": SYMBOL
+            "symbol": "NRH6",
+            "exchange": "MOEX"
         },
         "token": token
     }
     await ws.send(json.dumps(subscribe_msg))
-    print(f"Подписка на ORDERS оформлена: {SYMBOL}")
+    print(f"Подписка на QUOTES оформлена")
 
 
 async def websocket_listener():
