@@ -402,7 +402,7 @@ async def balance_strategy():
         
         if can_buy > 0:
             for i in range(can_buy):
-                price = base_price_lower - step * (i + 1)
+                price = base_price_lower - step * i
                 price = round(price, 3)
                 
                 if price == skip_buy_at:
@@ -426,7 +426,7 @@ async def balance_strategy():
         
         if can_sell > 0:
             for i in range(can_sell):
-                price = base_price_upper + step * (i + 1)
+                price = base_price_upper + step * i
                 price = round(price, 3)
                 
                 if price == skip_sell_at:
