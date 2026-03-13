@@ -391,14 +391,21 @@ async def balance_strategy():
         print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
         print(f"Последняя сделка: {last_trade_direction}")
         
-        # Выставляем заявки на покупку (1 лот каждая)
+        # Находим ближайшие кратные step значения от текущей цены
+        base_price_lower = round(nrh6_price - (nrh6_price % step), 3)
+        base_price_upper = base_price_lower + step
+        print(f"Ближайшие кратные: {base_price_lower} и {base_price_upper}")
+        
+        # Выставляем заявки на покупку от base_price_lower вниз
+        # Пропускаем ближайшую покупку если последняя сделка была BUY
+        skip_nearest_buy = (last_trade_direction == 'BUY')
+        
         if can_buy > 0:
             for i in range(can_buy):
-                price = nrh6_price - step * (i + 1)
+                price = base_price_lower - step * (i + 1)
                 price = round(price, 3)
                 
-                # Пропускаем ближайшую покупку если последняя сделка была BUY
-                if last_trade_direction == 'BUY' and i == 0:
+                if skip_nearest_buy and i == 0:
                     print(f"Пропускаю ближайшую покупку: {price} (последняя была покупка)")
                     continue
                 
@@ -413,14 +420,16 @@ async def balance_strategy():
                 except Exception as e:
                     print(f"Исключение: {str(e)[:50]}")
         
-        # Выставляем заявки на продажу (1 лот каждая)
+        # Выставляем заявки на продажу от base_price_upper вверх
+        # Пропускаем ближайшую продажу если последняя сделка была SELL
+        skip_nearest_sell = (last_trade_direction == 'SELL')
+        
         if can_sell > 0:
             for i in range(can_sell):
-                price = nrh6_price + step * (i + 1)
+                price = base_price_upper + step * (i + 1)
                 price = round(price, 3)
                 
-                # Пропускаем ближайшую продажу если последняя сделка была SELL
-                if last_trade_direction == 'SELL' and i == 0:
+                if skip_nearest_sell and i == 0:
                     print(f"Пропускаю ближайшую продажу: {price} (последняя была продажа)")
                     continue
                 
