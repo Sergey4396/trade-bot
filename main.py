@@ -322,10 +322,11 @@ async def print_status():
 last_balance_time = None
 balance_running = False
 last_trade_direction = None  # 'BUY' or 'SELL'
+last_executed_price = None  # Цена последней исполненной заявки
 
 async def balance_strategy():
     """Стратегия удержания позиции NRH6 в диапазоне [1, 60]"""
-    global last_balance_time, balance_running, last_trade_direction
+    global last_balance_time, balance_running, last_trade_direction, last_executed_price
     from datetime import datetime
     
     if balance_running:
@@ -340,6 +341,8 @@ async def balance_strategy():
     orders_placed = False
     can_buy = 0
     can_sell = 0
+    base_price_lower = 0
+    base_price_upper = 0
     
     try:
         now = datetime.now()
@@ -391,7 +394,10 @@ async def balance_strategy():
         can_sell = min(can_sell, 10)
         
         print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
-        print(f"Последняя сделка: {last_trade_direction}")
+        print(f"Последняя цена: {last_executed_price}")
+        
+        # Пропускаем заявку по последней исполненной цене
+        skip_price = last_executed_price
         
         # Находим ближайшие кратные step значения от текущей цены
         base_price_lower = round(nrh6_price - (nrh6_price % step), 3)
@@ -399,16 +405,14 @@ async def balance_strategy():
         print(f"Ближайшие кратные: {base_price_lower} и {base_price_upper}")
         
         # Выставляем заявки на покупку от base_price_lower вниз
-        # Если последняя была BUY - пропускаем base_price_lower (3.160)
-        skip_buy_at = base_price_lower if last_trade_direction == 'BUY' else None
-        
+        # Пропускаем заявку по последней исполненной цене
         if can_buy > 0:
             for i in range(can_buy):
                 price = base_price_lower - step * i
                 price = round(price, 3)
                 
-                if price == skip_buy_at:
-                    print(f"ПРОПУСК покупки {price}: последняя сделка была BUY, чтобы не перекупать")
+                if skip_price and abs(price - skip_price) < 0.001:
+                    print(f"ПРОПУСК покупки {price}: последняя сделка была по {skip_price}")
                     continue
                 
                 print(f"Выставляю покупку: 1 @ {price}")
@@ -423,16 +427,14 @@ async def balance_strategy():
                     print(f"Исключение: {str(e)[:50]}")
         
         # Выставляем заявки на продажу от base_price_upper вверх
-        # Если последняя была SELL - пропускаем base_price_upper (3.170)
-        skip_sell_at = base_price_upper if last_trade_direction == 'SELL' else None
-        
+        # Пропускаем заявку по последней исполненной цене
         if can_sell > 0:
             for i in range(can_sell):
                 price = base_price_upper + step * i
                 price = round(price, 3)
                 
-                if price == skip_sell_at:
-                    print(f"ПРОПУСК продажи {price}: последняя сделка была SELL, чтобы не продавать дешевле")
+                if skip_price and abs(price - skip_price) < 0.001:
+                    print(f"ПРОПУСК продажи {price}: последняя сделка была по {skip_price}")
                     continue
                 
                 print(f"Выставляю продажу: 1 @ {price}")
@@ -456,17 +458,18 @@ async def balance_strategy():
             last_balance_time = datetime.now()
             print(f"Заявки выставлены, таймер обновлён")
             
-            # Обновляем направление последней сделки на основе позиции
-            # Если можем продать (позиция > min_pos) - значит последней была продажа
-            # Если можем купить (позиция < max_pos) - значит последней была покупка
-            if can_sell > 0:
-                last_trade_direction = 'SELL'
-                print(f"Обновляю направление: SELL (можем продать {can_sell})")
-            elif can_buy > 0:
-                last_trade_direction = 'BUY'
-                print(f"Обновляю направление: BUY (можем купить {can_buy})")
+            # Обновляем цену последней исполненной заявки
+            # Используем base_price_lower или base_price_upper в зависимости от направления
+            if can_sell > 0 and can_buy == 0:
+                # Только продажи - значит были продажи
+                last_executed_price = base_price_upper
+                print(f"Обновляю последнюю цену: {last_executed_price} (продажа)")
+            elif can_buy > 0 and can_sell == 0:
+                # Только покупки - значит были покупки
+                last_executed_price = base_price_lower
+                print(f"Обновляю последнюю цену: {last_executed_price} (покупка)")
             
-            print(f"last_trade_direction = {last_trade_direction}")
+            print(f"last_executed_price = {last_executed_price}")
         else:
             print(f"Заявки НЕ выставлены, таймер НЕ обновлён - повтор через 10 сек")
         balance_running = False
