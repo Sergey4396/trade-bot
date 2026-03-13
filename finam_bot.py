@@ -10,6 +10,8 @@ import aiohttp
 from datetime import datetime
 
 TOKEN = os.environ.get('FINAM_TOKEN', 'YOUR_TOKEN_HERE')
+# Token is already JWT (starts with eyJ...), no need to exchange
+
 WS_URL = 'wss://api.finam.ru:443/ws'
 REST_URL = 'https://api.finam.ru'
 
@@ -149,10 +151,10 @@ async def websocket_listener():
         print("Установи FINAM_TOKEN в переменной окружения")
         return
     
-    print("Получаю JWT токен...")
-    jwt_token = await get_jwt_token(TOKEN)
-    if not jwt_token:
-        print("Не удалось получить JWT токен")
+    print("Получаю счета...")
+    account_id = await get_account_id(TOKEN)
+    if not account_id:
+        print("Не удалось получить account_id")
         return
     
     print(f"Подключаюсь к Finam WebSocket...")
@@ -162,7 +164,7 @@ async def websocket_listener():
             async with websockets.connect(WS_URL) as ws:
                 print("Подключено к Finam")
                 
-                await subscribe_orders(ws, jwt_token)
+                await subscribe_orders(ws, TOKEN)
                 
                 async for message in ws:
                     try:
@@ -179,7 +181,7 @@ async def websocket_listener():
                                         float(trade.get('last', 0)),
                                         int(trade.get('last_size', 0)),
                                         trade.get('direction', 'BUY'),
-                                        jwt_token
+                                        TOKEN
                                     )
                             
                             if 'orders' in payload:
@@ -189,7 +191,7 @@ async def websocket_listener():
                                         float(order.get('price', 0)),
                                         int(order.get('quantity', 0)),
                                         order.get('side', 'BUY'),
-                                        jwt_token
+                                        TOKEN
                                     )
                         
                         elif msg_type == 'ERROR':
