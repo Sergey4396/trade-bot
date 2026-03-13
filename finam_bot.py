@@ -15,54 +15,22 @@ ACCOUNT_ID = '1060e31a-5a84-4dc1-b0ca-d1e6b8c427e6'
 WS_URL = 'wss://api.finam.ru:443/ws'
 REST_URL = 'https://api.finam.ru'
 
-OFFSET = 0.024
+OFFSET = 0.020
+
+SYMBOL = 'NRH6@MOEX'
 
 TRADED_ORDERS = {}
 
-SYMBOL = 'NRH6'
-
-
-async def get_account_id(jwt_token):
-    """Get account ID"""
-    global ACCOUNT_ID
-    
-    if ACCOUNT_ID:
-        print(f"Using configured account ID: {ACCOUNT_ID}")
-        return ACCOUNT_ID
-    
-    url = f'{REST_URL}/v1/sessions/details'
-    headers = {
-        'Authorization': f'Bearer {jwt_token}',
-        'User-Agent': 'FinamBot/1.0',
-        'Content-Type': 'application/json'
-    }
-    data = {'token': jwt_token}
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=data, headers=headers) as resp:
-            if resp.status == 200:
-                try:
-                    data = await resp.json()
-                    account_ids = data.get('account_ids', [])
-                    if account_ids:
-                        ACCOUNT_ID = account_ids[0]
-                        print(f"Account ID from session: {ACCOUNT_ID}")
-                        return ACCOUNT_ID
-                except:
-                    pass
-            else:
-                print(f"Ошибка получения аккаунта: {resp.status}")
-    return None
+HEADERS = {
+    'Authorization': f'Bearer {TOKEN}',
+    'Content-Type': 'application/json',
+    'User-Agent': 'FinamBot/1.0'
+}
 
 
 async def send_order(quantity, direction, price):
     """Send order to Finam via REST API"""
     url = f'{REST_URL}/v1/accounts/{ACCOUNT_ID}/orders'
-    headers = {
-        'Authorization': f'Bearer {TOKEN}',
-        'Content-Type': 'application/json',
-        'User-Agent': 'FinamBot/1.0'
-    }
     
     order_data = {
         'symbol': SYMBOL,
@@ -76,18 +44,18 @@ async def send_order(quantity, direction, price):
     print(f"Отправляю заявку: {order_data}")
     
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=order_data, headers=headers) as resp:
+        async with session.post(url, json=order_data, headers=HEADERS) as resp:
             result = await resp.json()
             if resp.status in (200, 201):
                 order_id = result.get('order_id')
                 print(f"Заявка размещена: {order_id}")
                 return order_id
             else:
-                print(f"Ошибка размещения заявки: {result}")
+                print(f"Ошибка: {result}")
                 return None
-    
 
-async def handle_trade(symbol, price, quantity, direction, jwt_token):
+
+async def handle_trade(symbol, price, quantity, direction):
     """Handle incoming trade - place counter order"""
     if not symbol or not price or not quantity:
         return
@@ -105,134 +73,85 @@ async def handle_trade(symbol, price, quantity, direction, jwt_token):
     print(f"\n=== Сделка: {symbol} {direction} {quantity} @ {price} ===")
     
     if direction == "BUY":
-        counter_price = round(price + 0.020, 3)
+        counter_price = round(price + OFFSET, 3)
         counter_direction = "SELL"
     else:  # SELL
-        counter_price = round(price - 0.020, 3)
+        counter_price = round(price - OFFSET, 3)
         counter_direction = "BUY"
     
     print(f"Выставляю встречную заявку: {counter_direction} {quantity} @ {counter_price}")
     await send_order(quantity, counter_direction, counter_price)
 
 
-async def get_jwt_token(api_token):
-    """Get JWT token from API token"""
-    url = f'{REST_URL}/v1/auth'
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'FinamBot/1.0'
-    }
-    data = {'token': api_token}
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=data, headers=headers) as resp:
-            if resp.status == 200:
-                result = await resp.json()
-                jwt = result.get('token')
-                print(f"JWT получен")
-                return jwt
-            else:
-                print(f"Ошибка получения JWT: {resp.status}")
-                return None
-
-
-async def subscribe_orders(ws, token):
-    """Subscribe to orders/trades"""
+async def subscribe_and_listen(ws):
+    """Subscribe and listen for messages"""
     subscribe_msg = {
         "action": "SUBSCRIBE",
-        "type": "ORDERS",
+        "type": "TRADES",
         "data": {
-            "symbol": "NRH6@MOEX"
+            "symbol": SYMBOL
         }
     }
-    msg_str = json.dumps(subscribe_msg)
-    print(f"Отправляю: {msg_str}")
-    await ws.send(msg_str)
-    print(f"Подписка на ORDERS оформлена")
+    await ws.send(json.dumps(subscribe_msg))
+    print(f"Подписка на TRADES оформлена")
+    
+    try:
+        async for message in ws:
+            try:
+                data = json.loads(message)
+                msg_type = data.get('type', '')
+                
+                if msg_type == 'DATA':
+                    payload = data.get('payload', {})
+                    
+                    if 'trade' in payload:
+                        for trade in payload['trade']:
+                            await handle_trade(
+                                trade.get('symbol'),
+                                float(trade.get('last', 0)),
+                                int(trade.get('last_size', 0)),
+                                trade.get('side', trade.get('direction', 'BUY'))
+                            )
+                
+                elif msg_type == 'ERROR':
+                    error = data.get('error_info', {})
+                    print(f"Ошибка: {error.get('message', error)}")
+                    
+                elif msg_type == 'EVENT':
+                    event = data.get('event_info', {})
+                    event_type = event.get('event', '')
+                    print(f"Событие: {event_type}")
+                    
+            except Exception as e:
+                if '1000' in str(e) or 'OK' in str(e):
+                    continue
+                print(f"Ошибка обработки: {e}")
+                
+    except Exception as e:
+        print(f"Ошибка в subscribe_and_listen: {e}")
+        raise
 
 
 async def websocket_listener():
     """Main WebSocket loop"""
-    global TOKEN, ACCOUNT_ID
-    
-    if TOKEN == 'YOUR_TOKEN_HERE':
-        print("Установи FINAM_TOKEN в переменной окружения")
-        return
-    
-    print("Получаю счета...")
-    account_id = await get_account_id(TOKEN)
-    if not account_id:
-        print("Не удалось получить account_id")
-        return
-    
-    print(f"Подключаюсь к Finam WebSocket...")
-    
     while True:
         try:
-            async with websockets.connect(WS_URL, additional_headers={'Authorization': f'Bearer {TOKEN}'}) as ws:
+            print("Подключаюсь к Finam...")
+            async with websockets.connect(WS_URL, ping_interval=25, ping_timeout=20) as ws:
                 print("Подключено к Finam")
-                
-                await subscribe_orders(ws, TOKEN)
-                
-                async for message in ws:
-                    try:
-                        data = json.loads(message)
-                        msg_type = data.get('type', '')
-                        
-                        if msg_type == 'DATA':
-                            payload = data.get('payload', {})
-                            
-                            if 'trade' in payload:
-                                for trade in payload['trade']:
-                                    await handle_trade(
-                                        trade.get('symbol'),
-                                        float(trade.get('last', 0)),
-                                        int(trade.get('last_size', 0)),
-                                        trade.get('direction', 'BUY'),
-                                        TOKEN
-                                    )
-                            
-                            if 'orders' in payload:
-                                for order in payload['orders']:
-                                    await handle_trade(
-                                        order.get('symbol'),
-                                        float(order.get('price', 0)),
-                                        int(order.get('quantity', 0)),
-                                        order.get('side', 'BUY'),
-                                        TOKEN
-                                    )
-                        
-                        elif msg_type == 'ERROR':
-                            error = data.get('error_info', {})
-                            print(f"Ошибка: {error.get('message', error)}")
-                            
-                        elif msg_type == 'EVENT':
-                            event = data.get('event_info', {})
-                            event_type = event.get('event', '')
-                            print(f"Событие: {event_type}")
-                            
-                            if event_type == 'CONNECTION_CLOSED':
-                                print("Переподключаюсь...")
-                                break
-                                
-                    except json.JSONDecodeError:
-                        continue
-                    except Exception as e:
-                        if '1000 (OK)' in str(e):
-                            continue
-                        print(f"Ошибка обработки: {e}")
-                        
+                await subscribe_and_listen(ws)
         except websockets.exceptions.ConnectionClosed as e:
-            print(f"Соединение закрыто: {e}, переподключаюсь через 5 сек...")
-            await asyncio.sleep(5)
+            print(f"Соединение закрыто: {e}, переподключаюсь через 3 сек...")
+            await asyncio.sleep(3)
         except Exception as e:
-            print(f"Ошибка: {e}, переподключаюсь через 5 сек...")
-            await asyncio.sleep(5)
+            print(f"Ошибка: {e}, переподключаюсь через 3 сек...")
+            await asyncio.sleep(3)
 
 
 async def main():
     print("Finam Trading Bot - WebSocket Version")
-    print(f"Токен: {'Установлен' if TOKEN != 'YOUR_TOKEN_HERE' else 'НЕ УСТАНОВЛЕН'}")
+    print(f"Токен: Установлен")
+    print(f"Account ID: {ACCOUNT_ID}")
     await websocket_listener()
 
 
