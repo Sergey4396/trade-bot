@@ -90,7 +90,8 @@ async def subscribe_and_listen(ws):
         "type": "QUOTES",
         "data": {
             "symbol": SYMBOL
-        }
+        },
+        "token": TOKEN
     }
     await ws.send(json.dumps(subscribe_msg))
     print(f"Подписка оформлена")
