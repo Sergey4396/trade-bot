@@ -140,7 +140,7 @@ async def subscribe_orders(ws, token):
     """Subscribe to orders/trades"""
     subscribe_msg = {
         "action": "SUBSCRIBE",
-        "type": "TRADES",
+        "type": "ORDERS",
         "data": {
             "symbol": "NRH6@MOEX"
         }
