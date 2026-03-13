@@ -397,16 +397,16 @@ async def balance_strategy():
         print(f"Ближайшие кратные: {base_price_lower} и {base_price_upper}")
         
         # Выставляем заявки на покупку от base_price_lower вниз
-        # Пропускаем ближайшую покупку если последняя сделка была BUY
-        skip_nearest_buy = (last_trade_direction == 'BUY')
+        # Если последняя была BUY - пропускаем base_price_lower (3.160)
+        skip_buy_at = base_price_lower if last_trade_direction == 'BUY' else None
         
         if can_buy > 0:
             for i in range(can_buy):
                 price = base_price_lower - step * (i + 1)
                 price = round(price, 3)
                 
-                if skip_nearest_buy and i == 0:
-                    print(f"Пропускаю ближайшую покупку: {price} (последняя была покупка)")
+                if price == skip_buy_at:
+                    print(f"Пропускаю покупку: {price} (последняя была покупка)")
                     continue
                 
                 print(f"Выставляю покупку: 1 @ {price}")
@@ -421,16 +421,16 @@ async def balance_strategy():
                     print(f"Исключение: {str(e)[:50]}")
         
         # Выставляем заявки на продажу от base_price_upper вверх
-        # Пропускаем ближайшую продажу если последняя сделка была SELL
-        skip_nearest_sell = (last_trade_direction == 'SELL')
+        # Если последняя была SELL - пропускаем base_price_upper (3.170)
+        skip_sell_at = base_price_upper if last_trade_direction == 'SELL' else None
         
         if can_sell > 0:
             for i in range(can_sell):
                 price = base_price_upper + step * (i + 1)
                 price = round(price, 3)
                 
-                if skip_nearest_sell and i == 0:
-                    print(f"Пропускаю ближайшую продажу: {price} (последняя была продажа)")
+                if price == skip_sell_at:
+                    print(f"Пропускаю продажу: {price} (последняя была продажа)")
                     continue
                 
                 print(f"Выставляю продажу: 1 @ {price}")
