@@ -18,15 +18,17 @@ REST_URL = 'https://api.finam.ru'
 OFFSET = 0.024
 
 TRADED_ORDERS = {}
-ACCOUNT_ID = None
+ACCOUNT_ID = os.environ.get('FINAM_ACCOUNT_ID', None)
 
 SYMBOL = os.environ.get('FINAM_SYMBOL', 'NRH6@MOEX')
 
 
 async def get_account_id(jwt_token):
-    """Get account ID from token details"""
+    """Get account ID"""
     global ACCOUNT_ID
+    
     if ACCOUNT_ID:
+        print(f"Using configured account ID: {ACCOUNT_ID}")
         return ACCOUNT_ID
     
     url = f'{REST_URL}/v1/sessions/details'
@@ -40,21 +42,17 @@ async def get_account_id(jwt_token):
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=data, headers=headers) as resp:
             if resp.status == 200:
-                result = await resp.text()
-                print(f"Session details response: {result[:500]}")
                 try:
                     data = await resp.json()
                     account_ids = data.get('account_ids', [])
                     if account_ids:
                         ACCOUNT_ID = account_ids[0]
-                        print(f"Account ID: {ACCOUNT_ID}")
+                        print(f"Account ID from session: {ACCOUNT_ID}")
                         return ACCOUNT_ID
                 except:
                     pass
             else:
                 print(f"Ошибка получения аккаунта: {resp.status}")
-                text = await resp.text()
-                print(f"Response: {text[:500]}")
     return None
 
 
