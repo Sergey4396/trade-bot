@@ -19,7 +19,7 @@ OFFSET = 0.024
 
 TRADED_ORDERS = {}
 
-SYMBOL = 'NRH6@MOEX'
+SYMBOL = 'NRH6'
 
 
 async def get_account_id(jwt_token):
@@ -55,33 +55,30 @@ async def get_account_id(jwt_token):
     return None
 
 
-async def send_order(symbol, quantity, direction, price, jwt_token):
+async def send_order(quantity, direction, price):
     """Send order to Finam via REST API"""
-    account_id = await get_account_id(jwt_token)
-    if not account_id:
-        print("Не могу получить account_id")
-        return None
-    
-    url = f'{REST_URL}/v1/accounts/{account_id}/orders'
+    url = f'{REST_URL}/v1/accounts/{ACCOUNT_ID}/orders'
     headers = {
-        'Authorization': f'Bearer {jwt_token}',
+        'Authorization': f'Bearer {TOKEN}',
         'Content-Type': 'application/json',
         'User-Agent': 'FinamBot/1.0'
     }
     
     order_data = {
-        'symbol': symbol,
+        'symbol': SYMBOL,
         'quantity': str(quantity),
-        'side': 'BUY' if direction == 'BUY' else 'SELL',
+        'side': direction,
         'type': 'LIMIT',
         'limit_price': str(price),
         'time_in_force': 'DAY'
     }
     
+    print(f"Отправляю заявку: {order_data}")
+    
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=order_data, headers=headers) as resp:
             result = await resp.json()
-            if resp.status == 200:
+            if resp.status in (200, 201):
                 order_id = result.get('order_id')
                 print(f"Заявка размещена: {order_id}")
                 return order_id
@@ -107,11 +104,15 @@ async def handle_trade(symbol, price, quantity, direction, jwt_token):
     
     print(f"\n=== Сделка: {symbol} {direction} {quantity} @ {price} ===")
     
-    counter_price = round(price - OFFSET, 3)
-    counter_direction = "SELL" if direction == "BUY" else "BUY"
+    if direction == "BUY":
+        counter_price = round(price + 0.020, 3)
+        counter_direction = "SELL"
+    else:  # SELL
+        counter_price = round(price - 0.020, 3)
+        counter_direction = "BUY"
     
-    print(f"Выставляю встречную заявку: {symbol} {counter_direction} {quantity} @ {counter_price}")
-    await send_order(symbol, quantity, counter_direction, counter_price, jwt_token)
+    print(f"Выставляю встречную заявку: {counter_direction} {quantity} @ {counter_price}")
+    await send_order(quantity, counter_direction, counter_price)
 
 
 async def get_jwt_token(api_token):
