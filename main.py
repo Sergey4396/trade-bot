@@ -211,6 +211,7 @@ async def check_new_trades():
 
 async def place_counter_order(trade_info):
     """Place counter-order at specified price offset"""
+    global last_trade_direction
     figi = trade_info['figi']
     direction = trade_info['direction']
     price = float(trade_info['price'])
@@ -236,6 +237,14 @@ async def place_counter_order(trade_info):
     
     result = await post_order(figi, quantity, counter_direction, counter_price)
     print(f"Order result: {result}")
+    
+    # Update last trade direction based on counter direction
+    if counter_direction == 'ORDER_DIRECTION_BUY':
+        last_trade_direction = 'BUY'
+    else:
+        last_trade_direction = 'SELL'
+    print(f"Обновляю последнюю сделку: {last_trade_direction}")
+    
     return result
 
 def format_price(price_dict):
@@ -280,18 +289,17 @@ async def print_status():
 # Track last balance strategy run time
 last_balance_time = None
 balance_running = False
+last_trade_direction = None  # 'BUY' or 'SELL'
 
 async def balance_strategy():
-    """Стратегия удержания позиции NRH6 в диапазоне [-1, -201]"""
-    global last_balance_time, balance_running
-    from datetime import datetime, timedelta
+    """Стратегия удержания позиции NRH6 в диапазоне [1, 60]"""
+    global last_balance_time, balance_running, last_trade_direction
+    from datetime import datetime
     
-    # Блокировка - не запускаем если уже работает
     if balance_running:
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    # Проверяем когда последний раз запускали (минимум 10 минут назад)
     if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
         print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
@@ -304,31 +312,19 @@ async def balance_strategy():
         
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
         
-        # Отменяем все существующие заявки для NRH6
         orders = await get_orders()
         nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
         print(f"Активных заявок до отмены: {len(nrh6_orders)}")
         
-        cancelled = 0
         for order in nrh6_orders:
             order_id = order.get('orderId')
             print(f"Отменяю заявку {order_id}")
-            result = await cancel_order(order_id)
-            cancelled += 1
+            await cancel_order(order_id)
         
-        # Ждём чтобы отмены успели обработаться
-        if cancelled > 0:
-            print(f"Отменено {cancelled} заявок, жду 3 секунды...")
+        if nrh6_orders:
+            print("Жду 3 секунды...")
             await asyncio.sleep(3)
-            
-            # Проверяем сколько осталось
-            orders_after = await get_orders()
-            nrh6_after = [o for o in orders_after if o.get('figi') == FIGI_NRH6]
-            print(f"Активных заявок после отмены: {len(nrh6_after)}")
         
-        print("Получаю цену...")
-        
-        # Получаем цену NRH6
         prices = await get_prices([FIGI_NRH6])
         nrh6_price = None
         for p in prices:
@@ -339,7 +335,6 @@ async def balance_strategy():
             print("Не удалось получить цену NRH6")
             return
         
-        # Получаем позицию NRH6
         positions = await get_positions()
         nrh6_qty = 0
         for pos in positions:
@@ -350,68 +345,66 @@ async def balance_strategy():
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
         
-        # Диапазон: от -1 до -1201
-        min_pos = -1
-        max_pos = -1201
-        step = 0.003
-        first_lot = 10  # первая заявка - 10 лотов
+        # Диапазон: от 1 до 60
+        min_pos = 1
+        max_pos = 60
+        step = 0.010
         
-        # Вычисляем сколько можем купить (не выйти за -1)
-        can_buy = max(0, min_pos - nrh6_qty)
-        # Вычисляем сколько можем продать (не выйти за -1201)
-        can_sell = max(0, nrh6_qty - max_pos)
+        # Вычисляем сколько можем купить (не выйти за max_pos=60)
+        can_buy = max(0, max_pos - nrh6_qty)
+        # Вычисляем сколько можем продать (не выйти за min_pos=1)
+        can_sell = max(0, nrh6_qty - min_pos)
+        
+        # Ограничиваем макс 10 заявками
+        can_buy = min(can_buy, 10)
+        can_sell = min(can_sell, 10)
         
         print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
+        print(f"Последняя сделка: {last_trade_direction}")
         
-        # Выставляем заявки на покупку (10, 11, 12, ...)
+        # Выставляем заявки на покупку (1 лот каждая)
         if can_buy > 0:
-            remaining = can_buy
-            level = 0
-            while remaining > 0:
-                qty = first_lot + level  # 10, 11, 12, ...
-                if qty > remaining:
-                    qty = remaining
-                price = nrh6_price - step * (level + 1)
+            for i in range(can_buy):
+                price = nrh6_price - step * (i + 1)
                 price = round(price, 3)
-                print(f"Выставляю покупку: {qty} @ {price}")
+                
+                # Пропускаем ближайшую покупку если последняя сделка была BUY
+                if last_trade_direction == 'BUY' and i == 0:
+                    print(f"Пропускаю ближайшую покупку: {price} (последняя была покупка)")
+                    continue
+                
+                print(f"Выставляю покупку: 1 @ {price}")
                 try:
-                    result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_BUY', price)
+                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result:
                         print(f"Результат: {result.get('orderId')}")
                         orders_placed = True
                     else:
-                        print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+                        print(f"Ошибка: {result.get('message', result)[:50]}")
                 except Exception as e:
-                    print(f"Исключение (пропускаю): {str(e)[:50]}")
-                remaining -= qty
-                level += 1
-                if level >= 40:  # максимум 40 уровней
-                    break
+                    print(f"Исключение: {str(e)[:50]}")
         
-        # Выставляем заявки на продажу (10, 11, 12, ...)
+        # Выставляем заявки на продажу (1 лот каждая)
         if can_sell > 0:
-            remaining = can_sell
-            level = 0
-            while remaining > 0:
-                qty = first_lot + level  # 10, 11, 12, ...
-                if qty > remaining:
-                    qty = remaining
-                price = nrh6_price + step * (level + 1)
+            for i in range(can_sell):
+                price = nrh6_price + step * (i + 1)
                 price = round(price, 3)
-                print(f"Выставляю продажу: {qty} @ {price}")
+                
+                # Пропускаем ближайшую продажу если последняя сделка была SELL
+                if last_trade_direction == 'SELL' and i == 0:
+                    print(f"Пропускаю ближайшую продажу: {price} (последняя была продажа)")
+                    continue
+                
+                print(f"Выставляю продажу: 1 @ {price}")
                 try:
-                    result = await post_order(FIGI_NRH6, qty, 'ORDER_DIRECTION_SELL', price)
+                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result:
                         print(f"Результат: {result.get('orderId')}")
                         orders_placed = True
                     else:
-                        print(f"Ошибка (пропускаю): {result.get('message', result)[:50]}")
+                        print(f"Ошибка: {result.get('message', result)[:50]}")
                 except Exception as e:
-                    print(f"Исключение (пропускаю): {str(e)[:50]}")
-                remaining -= qty
-                level += 1
-                if level >= 40:  # максимум 40 уровней
-                    break
+                    print(f"Исключение: {str(e)[:50]}")
         
         print("Балансная стратегия завершена")
         
