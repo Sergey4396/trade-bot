@@ -28,16 +28,21 @@ HEADERS = {
 async def get_trades():
     """Get recent trades"""
     url = f'{REST_URL}/v1/accounts/{ACCOUNT_ID}/trades'
+    from_ts = int((datetime.now() - timedelta(minutes=5)).timestamp())
+    to_ts = int(datetime.now().timestamp())
     params = {
-        'from': (datetime.now() - timedelta(minutes=5)).isoformat() + 'Z',
-        'to': datetime.now().isoformat() + 'Z'
+        'from': from_ts,
+        'to': to_ts
     }
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=HEADERS, params=params) as resp:
+            print(f"Trades response status: {resp.status}")
             if resp.status == 200:
                 data = await resp.json()
+                print(f"Trades response: {data}")
                 return data.get('trades', [])
-            print(f"Ошибка получения сделок: {resp.status}")
+            text = await resp.text()
+            print(f"Ошибка получения сделок: {resp.status} - {text[:200]}")
             return []
 
 
