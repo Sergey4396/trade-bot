@@ -72,13 +72,52 @@ async def get_futures_prices(figi_list):
 
 async def get_futures_price_by_figi(figi):
     """Get futures price using GetTradingStatus and GetOrderBook"""
-    # Try GetOrderBook first - it returns best prices
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={'figi': figi, 'depth': 1}, headers=headers) as resp:
+            data = await resp.json()
+            print(f"DEBUG: GetOrderBook response: {data}")
+            bids = data.get('bids', [])
+            asks = data.get('asks', [])
+            if bids and asks:
+                bid_price = float(format_price(bids[0].get('price', {})))
+                ask_price = float(format_price(asks[0].get('price', {})))
+                return (bid_price + ask_price) / 2
+            return None
+
+async def get_last_trade_price(figi):
+    """Get price of last executed trade for a FIGI"""
+    from datetime import datetime, timedelta
+    
+    global ACCOUNT_ID
+    if not ACCOUNT_ID:
+        await get_account_id()
+    
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(hours=1)
+    
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastTrades'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={
+            'figi': figi,
+            'from': start_time.isoformat() + 'Z',
+            'to': end_time.isoformat() + 'Z'
+        }, headers=headers) as resp:
+            data = await resp.json()
+            trades = data.get('trades', [])
+            if trades:
+                last_trade = trades[-1]
+                price = last_trade.get('price', {})
+                units = int(price.get('units', 0))
+                nano = int(price.get('nano', 0))
+                return round(units + nano / 1e9, 3)
+            return None
             data = await resp.json()
             print(f"DEBUG: GetOrderBook response: {data}")
             # Get best bid and ask
@@ -379,6 +418,12 @@ async def balance_strategy():
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
         
+        # Получаем цену последней исполненной сделки
+        last_trade_price = await get_last_trade_price(FIGI_NRH6)
+        if last_trade_price:
+            last_executed_price = last_trade_price
+            print(f"Последняя сделка по цене: {last_executed_price}")
+        
         # Диапазон: от 1 до 60
         min_pos = 1
         max_pos = 60
@@ -457,19 +502,6 @@ async def balance_strategy():
         if orders_placed:
             last_balance_time = datetime.now()
             print(f"Заявки выставлены, таймер обновлён")
-            
-            # Обновляем цену последней исполненной заявки
-            # Используем base_price_lower или base_price_upper в зависимости от направления
-            if can_sell > 0 and can_buy == 0:
-                # Только продажи - значит были продажи
-                last_executed_price = base_price_upper
-                print(f"Обновляю последнюю цену: {last_executed_price} (продажа)")
-            elif can_buy > 0 and can_sell == 0:
-                # Только покупки - значит были покупки
-                last_executed_price = base_price_lower
-                print(f"Обновляю последнюю цену: {last_executed_price} (покупка)")
-            
-            print(f"last_executed_price = {last_executed_price}")
         else:
             print(f"Заявки НЕ выставлены, таймер НЕ обновлён - повтор через 10 сек")
         balance_running = False
