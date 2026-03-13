@@ -89,7 +89,7 @@ async def get_futures_price_by_figi(figi):
             return None
 
 async def get_last_trade_price(figi):
-    """Get price of last executed trade for a FIGI"""
+    """Get price of last executed trade for our account"""
     from datetime import datetime, timedelta
     
     global ACCOUNT_ID
@@ -97,23 +97,28 @@ async def get_last_trade_price(figi):
         await get_account_id()
     
     end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=1)
+    start_time = end_time - timedelta(hours=4)
     
-    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastTrades'
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetOperations'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={
+            'accountId': ACCOUNT_ID,
             'figi': figi,
             'from': start_time.isoformat() + 'Z',
-            'to': end_time.isoformat() + 'Z'
+            'to': end_time.isoformat() + 'Z',
+            'operationTypes': ['OPERATION_TYPE_TRADE']
         }, headers=headers) as resp:
             data = await resp.json()
-            trades = data.get('trades', [])
+            operations = data.get('operations', [])
+            # Ищем последнюю операцию типа TRADE
+            trades = [op for op in operations if op.get('operationType') == 'TRADE']
             if trades:
-                last_trade = trades[-1]
-                price = last_trade.get('price', {})
+                # Берем последнюю
+                last_op = trades[-1]
+                price = last_op.get('price', {})
                 units = int(price.get('units', 0))
                 nano = int(price.get('nano', 0))
                 return round(units + nano / 1e9, 3)
