@@ -338,6 +338,8 @@ async def balance_strategy():
     
     balance_running = True
     orders_placed = False
+    can_buy = 0
+    can_sell = 0
     
     try:
         now = datetime.now()
@@ -453,6 +455,18 @@ async def balance_strategy():
         if orders_placed:
             last_balance_time = datetime.now()
             print(f"Заявки выставлены, таймер обновлён")
+            
+            # Обновляем направление последней сделки на основе позиции
+            # Если можем продать (позиция > min_pos) - значит последней была продажа
+            # Если можем купить (позиция < max_pos) - значит последней была покупка
+            if can_sell > 0:
+                last_trade_direction = 'SELL'
+                print(f"Обновляю направление: SELL (можем продать {can_sell})")
+            elif can_buy > 0:
+                last_trade_direction = 'BUY'
+                print(f"Обновляю направление: BUY (можем купить {can_buy})")
+            
+            print(f"last_trade_direction = {last_trade_direction}")
         else:
             print(f"Заявки НЕ выставлены, таймер НЕ обновлён - повтор через 10 сек")
         balance_running = False
