@@ -406,7 +406,7 @@ async def balance_strategy():
                 price = round(price, 3)
                 
                 if price == skip_buy_at:
-                    print(f"Пропускаю покупку: {price} (последняя была покупка)")
+                    print(f"ПРОПУСК покупки {price}: последняя сделка была BUY, чтобы не перекупать")
                     continue
                 
                 print(f"Выставляю покупку: 1 @ {price}")
@@ -430,7 +430,7 @@ async def balance_strategy():
                 price = round(price, 3)
                 
                 if price == skip_sell_at:
-                    print(f"Пропускаю продажу: {price} (последняя была продажа)")
+                    print(f"ПРОПУСК продажи {price}: последняя сделка была SELL, чтобы не продавать дешевле")
                     continue
                 
                 print(f"Выставляю продажу: 1 @ {price}")
