@@ -152,6 +152,22 @@ async def get_positions():
             data = await resp.json()
             return data.get('futures', [])
 
+async def get_future_info(ticker):
+    """Get futures contract info - currency, basic_asset, etc"""
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/FutureBy'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={
+            'idType': 'INSTRUMENT_ID_TYPE_TICKER',
+            'classCode': 'SPBFUT',
+            'ticker': ticker
+        }, headers=headers) as resp:
+            data = await resp.json()
+            print(f"DEBUG FutureBy {ticker}: {data}")
+            return data
+
 async def get_orders():
     """Get active orders"""
     global ACCOUNT_ID
@@ -408,6 +424,7 @@ initial_position = None  # Начальная позиция при первом
 
 # Храним цены которые мы отправили (в USD)
 order_prices_sent = {}  # order_id -> price (в долларах)
+future_info_fetched = False  # Флаг что инфо о фьючерсе уже получена
 
 async def monitor_orders():
     """Мониторинг заявок - просто выводим информацию о стакане"""
@@ -452,10 +469,11 @@ async def monitor_orders():
                 else:
                     print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency}")
                 
-                # Для NRH6 дополнительно получаем состояние заявки (может быть в пунктах)
-                if ticker == 'NRH6':
-                    if full_order_id:
-                        order_state = await get_order_state(full_order_id)
+                # Для NRH6 дополнительно получаем информацию о контракте (один раз)
+                global future_info_fetched
+                if ticker == 'NRH6' and not future_info_fetched:
+                    future_info_fetched = True
+                    future_info = await get_future_info('NRH6')
             
             if not nrh6_orders:
                 print(f"Нет активных заявок NRH6")
