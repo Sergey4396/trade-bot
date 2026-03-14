@@ -463,25 +463,56 @@ async def monitor_orders():
             orders = await get_orders()
             nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
             
-            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Стакан NRH6 (USD) ===")
-            print("         BID (покупка)        |        ASK (продажа)")
+            # Вычисляем курс если есть заявки и есть bid
+            usd_to_rub = None
+            if nrh6_orders and bids:
+                # Берём цену нашей заявки в RUB
+                first_order = nrh6_orders[0]
+                price_val = first_order.get('initialOrderPrice', {})
+                if price_val:
+                    rub_units = int(price_val.get('units', 0))
+                    rub_nano = int(price_val.get('nano', 0))
+                    rub_price = rub_units + rub_nano / 1e9
+                    
+                    # Берём лучший bid в USD
+                    usd_price = float(format_price(bids[0].get('price', {})))
+                    
+                    if usd_price > 0:
+                        usd_to_rub = rub_price / usd_price
+            
+            # Функция конвертации USD -> RUB
+            def usd_to_rub_val(usd_price):
+                if usd_to_rub:
+                    return usd_price * usd_to_rub
+                return None
+            
+            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Стакан NRH6 ===")
+            if usd_to_rub:
+                print(f"Курс USD/RUB: {usd_to_rub:.2f}")
+            print("      BID (USD)  | BID (RUB)   |   ASK (USD)  | ASK (RUB)")
             for i in range(min(15, max(len(bids), len(asks)))):
-                bid_line = ""
-                ask_line = ""
+                bid_usd = ""
+                bid_rub = ""
+                ask_usd = ""
+                ask_rub = ""
                 
                 if i < len(bids):
                     b = bids[i]
-                    b_price = float(format_price(b.get('price', {})))
+                    b_price_usd = float(format_price(b.get('price', {})))
                     b_qty = int(b.get('quantity', 0))
-                    bid_line = f"{b_price:.3f}  ({b_qty:>4})"
+                    b_price_rub = usd_to_rub_val(b_price_usd)
+                    bid_usd = f"{b_price_usd:.3f} ({b_qty:>3})"
+                    bid_rub = f"{b_price_rub:.2f}" if b_price_rub else "-"
                 
                 if i < len(asks):
                     a = asks[i]
-                    a_price = float(format_price(a.get('price', {})))
+                    a_price_usd = float(format_price(a.get('price', {})))
                     a_qty = int(a.get('quantity', 0))
-                    ask_line = f"{a_price:.3f}  ({a_qty:>4})"
+                    a_price_rub = usd_to_rub_val(a_price_usd)
+                    ask_usd = f"{a_price_usd:.3f} ({a_qty:>3})"
+                    ask_rub = f"{a_price_rub:.2f}" if a_price_rub else "-"
                 
-                print(f"  {bid_line:<22} | {ask_line}")
+                print(f"  {bid_usd:<14} {bid_rub:<9} | {ask_usd:<14} {ask_rub}")
             
             print(f"\n=== Наши заявки ({len(nrh6_orders)}) ===")
             for o in nrh6_orders:
