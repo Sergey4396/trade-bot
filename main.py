@@ -165,7 +165,11 @@ async def get_orders():
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={'accountId': ACCOUNT_ID}, headers=headers) as resp:
             data = await resp.json()
-            return data.get('orders', [])
+            # Debug: print first order structure
+            orders = data.get('orders', [])
+            if orders:
+                print(f"DEBUG: first order = {orders[0]}")
+            return orders
 
 async def cancel_order(order_id):
     """Cancel an order"""
