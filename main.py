@@ -421,6 +421,7 @@ async def balance_strategy():
                 nrh6_qty = balance + blocked
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
+        print(f"Type of nrh6_price: {type(nrh6_price)}")
         
         # Запоминаем начальную позицию при первом запуске
         if initial_position is None:
@@ -521,7 +522,9 @@ async def balance_strategy():
         print("Балансная стратегия завершена")
         
     except Exception as e:
+        import traceback
         print(f"Ошибка в балансной стратегии: {e}")
+        print(traceback.format_exc())
     
     finally:
         if orders_placed:
