@@ -400,6 +400,7 @@ async def monitor_orders():
                 figi = o.get('figi', 'N/A')
                 ticker = o.get('ticker', 'N/A')
                 price_val = o.get('initialOrderPrice', {})
+                currency = o.get('currency', 'N/A')  # Валюта заявки
                 direction = o.get('direction', 'UNKNOWN')
                 qty = o.get('quantity', 0)
                 order_id = o.get('orderId', '')[:12]
@@ -407,41 +408,18 @@ async def monitor_orders():
                 if price_val:
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
-                    price = units + nano / 1e6 / 1000
-                    price = round(price, 3)
-                    price_str = str(price)
                     
-                    # Debug: show raw values
+                    # Используем правильный формат как в format_price
                     first_three = nano // 1000000
-                    raw_str = f"{units}.{str(first_three).zfill(3)}"
-                    print(f"    DEBUG: units={units}, nano={nano}, raw={raw_str}")
+                    price_str = f"{units}.{str(first_three).zfill(3)}"
                 else:
                     price_str = "?"
                 
                 direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
-                print(f"  {ticker} ({figi}): {direction_ru} {qty} @ {price_str} (id: {order_id})")
+                print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency} (id: {order_id})")
             
             if not nrh6_orders:
-                print(f"Нет активных заявок NRH6 ({FIGI_NRH6})")
-                continue
-            
-            print(f"\n--- Заявки NRH6: {len(nrh6_orders)} ---")
-            for o in nrh6_orders:
-                price_val = o.get('initialOrderPrice', {})
-                direction = o.get('direction', 'UNKNOWN')
-                qty = o.get('quantity', 0)
-                order_id = o.get('orderId', '')[:12]
-                price_str = "?"
-                
-                if price_val:
-                    units = int(price_val.get('units', 0))
-                    nano = int(price_val.get('nano', 0))
-                    price = (units + nano / 1e9) / 100
-                    price = round(price, 3)
-                    price_str = str(price)
-                
-                direction_ru = 'ПОКУПКА' if direction == 'ORDER_DIRECTION_BUY' else 'ПРОДАЖА'
-                print(f"  {direction_ru}: {qty} @ {price_str} (id: {order_id})")
+                print(f"Нет активных заявок NRH6")
             
             # Также показываем текущую позицию
             positions = await get_positions()
