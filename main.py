@@ -391,7 +391,7 @@ async def balance_strategy():
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
+    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 60:
         print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
     
