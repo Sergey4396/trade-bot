@@ -437,9 +437,10 @@ async def balance_strategy():
         # Просто проверяем общее количество заявок - не выставляем если их уже много
         total_orders = len(nrh6_orders)
         max_orders = 30  # Не более 30 заявок
+        orders_to_place = 20  # 10 покупок + 10 продаж
         
-        if total_orders >= max_orders:
-            print(f"Слишком много заявок: {total_orders}, пропускаем")
+        if total_orders + orders_to_place > max_orders:
+            print(f"Слишком много заявок: {total_orders} + {orders_to_place} > {max_orders}, пропускаем")
             balance_running = False
             return
         
