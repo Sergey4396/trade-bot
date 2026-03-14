@@ -407,7 +407,7 @@ async def monitor_orders():
                 if price_val:
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
-                    price = (units + nano / 1e9) / 100
+                    price = units + nano / 1e9
                     price = round(price, 3)
                     price_str = str(price)
                 else:
