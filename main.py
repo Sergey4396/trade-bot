@@ -370,52 +370,38 @@ last_balance_time = None
 balance_running = False
 last_trade_direction = None  # 'BUY' or 'SELL'
 last_executed_price = None  # Цена последней исполненной заявки
+initial_position = None  # Начальная позиция при первом запуске
 
 async def balance_strategy():
-    """Стратегия удержания позиции NRH6 в диапазоне [1, 60]"""
-    global last_balance_time, balance_running, last_trade_direction, last_executed_price
+    """Стратегия удержания позиции NRH6 - выставляем заявки в каждом диапазоне"""
+    global last_balance_time, balance_running, last_trade_direction, last_executed_price, initial_position
     from datetime import datetime
     
     if balance_running:
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
+    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 60:
         print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
     
     balance_running = True
     orders_placed = False
-    can_buy = 0
-    can_sell = 0
-    base_price_lower = 0
-    base_price_upper = 0
     
     try:
         now = datetime.now()
         
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
         
-        orders = await get_orders()
-        nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
-        print(f"Активных заявок до отмены: {len(nrh6_orders)}")
-        
-        for order in nrh6_orders:
-            order_id = order.get('orderId')
-            print(f"Отменяю заявку {order_id}")
-            await cancel_order(order_id)
-        
-        if nrh6_orders:
-            print("Жду 3 секунды...")
-            await asyncio.sleep(3)
-        
-        # Пробуем получить цену через GetOrderBook
+        # Получаем текущую цену
         nrh6_price = await get_futures_price_by_figi(FIGI_NRH6)
         
         if not nrh6_price:
             print("Не удалось получить цену NRH6 через GetOrderBook")
+            balance_running = False
             return
         
+        # Получаем позицию
         positions = await get_positions()
         nrh6_qty = 0
         for pos in positions:
@@ -426,56 +412,63 @@ async def balance_strategy():
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
         
-        # Диапазон: от 1 до 60
-        min_pos = 1
-        max_pos = 60
-        step = 0.010
+        # Запоминаем начальную позицию при первом запуске
+        if initial_position is None:
+            initial_position = nrh6_qty
+            print(f"Запоминаю начальную позицию: {initial_position}")
         
-        # Вычисляем сколько можем купить (не выйти за max_pos=60)
-        can_buy = max(0, max_pos - nrh6_qty)
-        # Вычисляем сколько можем продать (не выйти за min_pos=1)
-        can_sell = max(0, nrh6_qty - min_pos)
+        # Текущий диапазон = позиция
+        current_range = nrh6_qty
         
-        # Ограничиваем макс 10 заявками
-        can_buy = min(can_buy, 10)
-        can_sell = min(can_sell, 10)
+        # Получаем существующие заявки
+        orders = await get_orders()
+        nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
         
-        print(f"Можем купить: {can_buy}, можем продать: {can_sell}")
-        print(f"Последняя цена: {last_executed_price}")
+        # Группируем заявки по ценам
+        existing_prices = {}
+        for order in nrh6_orders:
+            price = float(format_price(order.get('price', {})))
+            existing_prices[price] = existing_prices.get(price, 0) + 1
         
-        # Пропускаем заявку по последней исполненной цене
-        skip_price = last_executed_price
+        print(f"Существующих заявок: {len(nrh6_orders)}, цены: {list(existing_prices.keys())}")
         
-        # Находим ближайшие кратные step значения от текущей цены
-        base_price_lower = round(nrh6_price - (nrh6_price % step), 3)
-        base_price_upper = base_price_lower + step
-        print(f"Ближайшие кратные: {base_price_lower} и {base_price_upper}")
-        
-        # Получаем цену последней исполненной сделки прямо перед выставлением заявок
+        # Получаем цену последней сделки для пропуска
         last_trade_price = await get_last_trade_price(FIGI_NRH6)
         if last_trade_price:
             last_executed_price = last_trade_price
-            # Находим ближайшую кратную цену
-            skip_price_lower = round(last_executed_price - (last_executed_price % step), 3)
-            skip_price_upper = skip_price_lower + step
-            # Берем ту, которая ближе к последней сделке
-            if abs(last_executed_price - skip_price_lower) < abs(last_executed_price - skip_price_upper):
-                skip_price = skip_price_lower
-            else:
-                skip_price = skip_price_upper
-            print(f"Последняя сделка по цене: {last_executed_price}, пропускаем: {skip_price}")
+            print(f"Последняя сделка по цене: {last_executed_price}")
         
-        # Выставляем заявки на покупку от base_price_lower вниз
-        # Пропускаем заявку по последней исполненной цене
-        if can_buy > 0:
-            for i in range(can_buy):
-                price = base_price_lower - step * i
-                price = round(price, 3)
-                
-                if skip_price and abs(price - skip_price) < 0.001:
-                    print(f"ПРОПУСК покупки {price}: последняя сделка была по {skip_price}")
-                    continue
-                
+        step = 0.010
+        
+        # Определяем базовую цену (центр текущего диапазона)
+        base_price = round(nrh6_price - (nrh6_price % step), 3)
+        
+        print(f"Базовая цена: {base_price}, диапазон: {current_range}")
+        
+        # Выставляем заявки для каждого диапазона
+        # Для диапазона i нужно: max(1, current_range - i + 1) лотов
+        # Но фактически мы выставляем по 1 лоту на each 0.010 step
+        
+        # Диапазон позиций: от 1 до 60
+        min_range = 1
+        max_range = 60
+        
+        # Выставляем заявки от текущего диапазона вниз (покупки)
+        for i in range(current_range - 1, min_range - 1, -1):
+            # Цена для этого диапазона
+            price = base_price - step * (current_range - i)
+            price = round(price, 3)
+            
+            # Пропускаем цену последней сделки
+            if last_executed_price and abs(price - last_executed_price) < 0.001:
+                print(f"ПРОПУСК покупки {price}: последняя сделка была по {last_executed_price}")
+                continue
+            
+            # Сколько заявок уже есть на эту цену
+            existing_count = existing_prices.get(price, 0)
+            
+            # Выставляем если нет заявки
+            if existing_count == 0:
                 print(f"Выставляю покупку: 1 @ {price}")
                 try:
                     result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
@@ -487,17 +480,22 @@ async def balance_strategy():
                 except Exception as e:
                     print(f"Исключение: {str(e)[:50]}")
         
-        # Выставляем заявки на продажу от base_price_upper вверх
-        # Пропускаем заявку по последней исполненной цене
-        if can_sell > 0:
-            for i in range(can_sell):
-                price = base_price_upper + step * i
-                price = round(price, 3)
-                
-                if skip_price and abs(price - skip_price) < 0.001:
-                    print(f"ПРОПУСК продажи {price}: последняя сделка была по {skip_price}")
-                    continue
-                
+        # Выставляем заявки от текущего диапазона вверх (продажи)
+        for i in range(current_range + 1, max_range + 1):
+            # Цена для этого диапазона
+            price = base_price + step * (i - current_range)
+            price = round(price, 3)
+            
+            # Пропускаем цену последней сделки
+            if last_executed_price and abs(price - last_executed_price) < 0.001:
+                print(f"ПРОПУСК продажи {price}: последняя сделка была по {last_executed_price}")
+                continue
+            
+            # Сколько заявок уже есть на эту цену
+            existing_count = existing_prices.get(price, 0)
+            
+            # Выставляем если нет заявки
+            if existing_count == 0:
                 print(f"Выставляю продажу: 1 @ {price}")
                 try:
                     result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
