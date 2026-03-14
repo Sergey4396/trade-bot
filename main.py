@@ -91,6 +91,16 @@ async def get_futures_price_by_figi(figi):
                 return (bid_price + ask_price) / 2
             return None
 
+async def get_orderbook_with_depth(figi, depth=20):
+    """Get order book with depth for comparison"""
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={'figi': figi, 'depth': depth}, headers=headers) as resp:
+            return await resp.json()
+
 async def get_last_trade_price(figi):
     """Get price of last executed trade for our account"""
     from datetime import datetime, timedelta
@@ -444,51 +454,77 @@ async def monitor_orders():
         try:
             await asyncio.sleep(10)
             
+            # Получаем стакан для NRH6
+            ob = await get_orderbook_with_depth(FIGI_NRH6, 20)
+            bids = ob.get('bids', [])
+            asks = ob.get('asks', [])
+            
             # Получаем заявки
             orders = await get_orders()
             nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
             
-            # Показываем ВСЕ заявки для отладки
-            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} ВСЕ заявки: {len(orders)} ===")
-            for o in orders:
-                figi = o.get('figi', 'N/A')
-                ticker = o.get('ticker', 'N/A')
+            # Собираем цены наших заявок из стакана (в USD/пунктах)
+            our_bids = {}  # price -> qty
+            our_asks = {}  # price -> qty
+            
+            for o in nrh6_orders:
                 price_val = o.get('initialOrderPrice', {})
-                currency = o.get('currency', 'N/A')  # Валюта заявки
                 direction = o.get('direction', 'UNKNOWN')
-                qty = o.get('quantity', 0)
-                order_id = o.get('orderId', '')[:12]
+                qty = int(o.get('quantity', 0))
                 
                 if price_val:
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
+                    # Конвертируем рубли в USD (делим на курс)
+                    # Курс ~ 80, получаем из стакана
+                    rub_price = units + nano / 1e9
                     
-                    # Используем правильный формат как в format_price
-                    first_three = nano // 1000000
-                    price_str = f"{units}.{str(first_three).zfill(3)}"
-                else:
-                    price_str = "?"
-                
-                direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
-                
-                # Показываем цену которую мы отправили (если есть)
-                full_order_id = o.get('orderId', '')
-                price_sent_usd = order_prices_sent.get(full_order_id)
-                if price_sent_usd:
-                    print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency} -> мы отправили: {price_sent_usd} USD")
-                else:
-                    print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency}")
-                
-                # Для NRH6 дополнительно получаем информацию о контракте (один раз)
-                global future_info_fetched
-                if ticker == 'NRH6' and not future_info_fetched:
-                    future_info_fetched = True
-                    future_info = await get_future_info(FIGI_NRH6)
+                    # Пытаемся найти ближайшую цену в стакане
+                    for bid in bids:
+                        bid_units = int(bid.get('price', {}).get('units', 0))
+                        bid_nano = int(bid.get('price', {}).get('nano', 0))
+                        bid_price = bid_units + bid_nano / 1e6 / 1000
+                        
+                        # Если цена в стакане примерно совпадает
+                        if bid_price > 0 and abs(rub_price / bid_price - 80) < 5:
+                            our_bids[bid_price] = our_bids.get(bid_price, 0) + qty
+                            break
             
-            if not nrh6_orders:
-                print(f"Нет активных заявок NRH6")
+            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Стакан NRH6 ===")
+            print("BID (покупка)  | ASK (продажа)")
+            for i in range(min(10, max(len(bids), len(asks)))):
+                bid_line = ""
+                ask_line = ""
+                
+                if i < len(bids):
+                    b = bids[i]
+                    b_price = float(format_price(b.get('price', {})))
+                    b_qty = int(b.get('quantity', 0))
+                    b_marker = f"*{b_qty}" if b_price in our_bids else ""
+                    bid_line = f"{b_price:.3f} ({b_qty}{b_marker})"
+                
+                if i < len(asks):
+                    a = asks[i]
+                    a_price = float(format_price(a.get('price', {})))
+                    a_qty = int(a.get('quantity', 0))
+                    a_marker = f"*{a_qty}" if a_price in our_asks else ""
+                    ask_line = f"{a_price:.3f} ({a_qty}{a_marker})"
+                
+                print(f"  {bid_line:<18} | {ask_line}")
             
-            # Также показываем текущую позицию
+            print(f"\nНаши заявки: {len(nrh6_orders)}")
+            for o in nrh6_orders:
+                direction = o.get('direction', 'UNKNOWN')
+                qty = o.get('quantity', 0)
+                price_val = o.get('initialOrderPrice', {})
+                if price_val:
+                    units = int(price_val.get('units', 0))
+                    nano = int(price_val.get('nano', 0))
+                    rub_price = units + nano / 1e9
+                    direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
+                    print(f"  {direction_ru}: {qty} @ {rub_price:.2f} RUB")
+            
+            # Позиция
             positions = await get_positions()
             for pos in positions:
                 if pos.get('figi') == FIGI_NRH6:
