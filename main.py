@@ -198,7 +198,7 @@ async def get_order_state(order_id):
             return data
 
 async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TYPE_LIMIT'):
-    global ACCOUNT_ID
+    global ACCOUNT_ID, order_prices_sent
     if not ACCOUNT_ID:
         await get_account_id()
     
@@ -214,6 +214,7 @@ async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TY
     }
     
     # Add price for limit orders
+    price_sent = None
     if price is not None:
         if figi.startswith('FUT'):
             price_str = f"{price:.3f}"
@@ -223,11 +224,18 @@ async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TY
         units = int(parts[0])
         nano = int(parts[1].ljust(9, '0')[:9])
         order_data['price'] = {'units': units, 'nano': nano}
+        price_sent = price
     
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json=order_data, headers=headers) as resp:
-            return await resp.json()
+            result = await resp.json()
+            
+            # Сохраняем цену которую отправили
+            if price_sent and 'orderId' in result:
+                order_prices_sent[result['orderId']] = price_sent
+            
+            return result
 
 async def get_operations(from_date, to_date):
     """Get operations (trades)"""
@@ -398,6 +406,9 @@ last_trade_direction = None  # 'BUY' or 'SELL'
 last_executed_price = None  # Цена последней исполненной заявки
 initial_position = None  # Начальная позиция при первом запуске
 
+# Храним цены которые мы отправили (в USD)
+order_prices_sent = {}  # order_id -> price (в долларах)
+
 async def monitor_orders():
     """Мониторинг заявок - просто выводим информацию о стакане"""
     print("Запускаю мониторинг заявок (режим просмотра)")
@@ -432,11 +443,17 @@ async def monitor_orders():
                     price_str = "?"
                 
                 direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
-                print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency} (id: {order_id})")
+                
+                # Показываем цену которую мы отправили (если есть)
+                full_order_id = o.get('orderId', '')
+                price_sent_usd = order_prices_sent.get(full_order_id)
+                if price_sent_usd:
+                    print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency} -> мы отправили: {price_sent_usd} USD")
+                else:
+                    print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency}")
                 
                 # Для NRH6 дополнительно получаем состояние заявки (может быть в пунктах)
                 if ticker == 'NRH6':
-                    full_order_id = o.get('orderId', '')
                     if full_order_id:
                         order_state = await get_order_state(full_order_id)
             
