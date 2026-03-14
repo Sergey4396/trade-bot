@@ -165,11 +165,7 @@ async def get_orders():
     async with aiohttp.ClientSession(connector=connector) as session:
         async with session.post(url, json={'accountId': ACCOUNT_ID}, headers=headers) as resp:
             data = await resp.json()
-            # Debug: print first order structure
-            orders = data.get('orders', [])
-            if orders:
-                print(f"DEBUG: first order = {orders[0]}")
-            return orders
+            return data.get('orders', [])
 
 async def cancel_order(order_id):
     """Cancel an order"""
@@ -441,10 +437,14 @@ async def balance_strategy():
         # Группируем заявки по ценам
         existing_prices = {}
         for order in nrh6_orders:
-            price_val = order.get('price', {})
-            print(f"DEBUG: order price = {price_val}")
-            price = round(parse_price(price_val), 3)
-            existing_prices[price] = existing_prices.get(price, 0) + 1
+            # Цена заявки в initialOrderPrice (в рублях за 100 лотов)
+            price_val = order.get('initialOrderPrice', {})
+            if price_val:
+                units = price_val.get('units', 0)
+                nano = price_val.get('nano', 0)
+                price = (units + nano / 1e9) / 100  # Делим на 100 для получения цены за 1 лот
+                price = round(price, 3)
+                existing_prices[price] = existing_prices.get(price, 0) + 1
         
         print(f"Существующих заявок: {len(nrh6_orders)}, цены: {list(existing_prices.keys())}")
         
