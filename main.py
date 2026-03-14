@@ -382,6 +382,55 @@ last_trade_direction = None  # 'BUY' or 'SELL'
 last_executed_price = None  # Цена последней исполненной заявки
 initial_position = None  # Начальная позиция при первом запуске
 
+async def monitor_orders():
+    """Мониторинг заявок - просто выводим информацию о стакане"""
+    print("Запускаю мониторинг заявок (режим просмотра)")
+    
+    while True:
+        try:
+            await asyncio.sleep(10)
+            
+            # Получаем заявки
+            orders = await get_orders()
+            nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
+            
+            if not nrh6_orders:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Нет активных заявок NRH6")
+                continue
+            
+            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Заявки NRH6: {len(nrh6_orders)} ===")
+            for o in nrh6_orders:
+                price_val = o.get('initialOrderPrice', {})
+                direction = o.get('direction', 'UNKNOWN')
+                qty = o.get('quantity', 0)
+                order_id = o.get('orderId', '')[:12]
+                price_str = "?"
+                
+                if price_val:
+                    units = int(price_val.get('units', 0))
+                    nano = int(price_val.get('nano', 0))
+                    price = (units + nano / 1e9) / 100
+                    price = round(price, 3)
+                    price_str = str(price)
+                
+                direction_ru = 'ПОКУПКА' if direction == 'ORDER_DIRECTION_BUY' else 'ПРОДАЖА'
+                print(f"  {direction_ru}: {qty} @ {price_str} (id: {order_id})")
+            
+            # Также показываем текущую позицию
+            positions = await get_positions()
+            for pos in positions:
+                if pos.get('figi') == FIGI_NRH6:
+                    balance = int(pos.get('balance', 0))
+                    print(f"Позиция: {balance}")
+                    break
+                    
+        except KeyboardInterrupt:
+            print("\nМониторинг остановлен")
+            break
+        except Exception as e:
+            print(f"Ошибка мониторинга: {e}")
+            await asyncio.sleep(10)
+
 async def balance_strategy():
     """Стратегия удержания позиции NRH6 - выставляем заявки в каждом диапазоне"""
     global last_balance_time, balance_running, last_trade_direction, last_executed_price, initial_position
@@ -603,24 +652,9 @@ async def main():
     # Print initial status
     await print_status()
     
-    # Запускаем балансную стратегию сразу при старте
-    await balance_strategy()
-    
-    # Poll every 10 seconds
-    while True:
-        try:
-            await asyncio.sleep(10)
-            
-            # Балансная стратегия каждые 5 минут
-            await balance_strategy()
-            
-            await print_status()
-        except KeyboardInterrupt:
-            print("\nStopping...")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            await asyncio.sleep(10)
+    # Запускаем мониторинг (только смотрим, не выставляем)
+    # Это бесконечный цикл, дальше код не выполняется
+    await monitor_orders()
 
 if __name__ == '__main__':
     asyncio.run(main())
