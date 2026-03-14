@@ -437,7 +437,9 @@ async def balance_strategy():
         # Группируем заявки по ценам
         existing_prices = {}
         for order in nrh6_orders:
-            price = round(parse_price(order.get('price', {})), 3)
+            price_val = order.get('price', {})
+            print(f"DEBUG: order price = {price_val}")
+            price = round(parse_price(price_val), 3)
             existing_prices[price] = existing_prices.get(price, 0) + 1
         
         print(f"Существующих заявок: {len(nrh6_orders)}, цены: {list(existing_prices.keys())}")
