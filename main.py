@@ -152,21 +152,31 @@ async def get_positions():
             data = await resp.json()
             return data.get('futures', [])
 
-async def get_future_info(ticker):
+async def get_future_info(figi_or_ticker):
     """Get futures contract info - currency, basic_asset, etc"""
     url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/FutureBy'
     headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
     
+    # Пробуем разные способы
     connector = aiohttp.TCPConnector(ssl=ssl_context)
     async with aiohttp.ClientSession(connector=connector) as session:
+        # Сначала пробуем по FIGI
         async with session.post(url, json={
-            'idType': 'INSTRUMENT_ID_TYPE_TICKER',
-            'classCode': 'SPBFUT',
-            'ticker': ticker
+            'idType': 'INSTRUMENT_ID_TYPE_FIGI',
+            'id': figi_or_ticker
         }, headers=headers) as resp:
             data = await resp.json()
-            print(f"DEBUG FutureBy {ticker}: {data}")
-            return data
+            if 'ticker' in data:
+                print(f"DEBUG FutureBy {figi_or_ticker}: {data}")
+                return data
+            # Пробуем по UID
+            async with session.post(url, json={
+                'idType': 'INSTRUMENT_ID_TYPE_UID',
+                'id': figi_or_ticker
+            }, headers=headers) as resp2:
+                data2 = await resp2.json()
+                print(f"DEBUG FutureBy {figi_or_ticker}: {data2}")
+                return data2
 
 async def get_orders():
     """Get active orders"""
@@ -473,7 +483,7 @@ async def monitor_orders():
                 global future_info_fetched
                 if ticker == 'NRH6' and not future_info_fetched:
                     future_info_fetched = True
-                    future_info = await get_future_info('NRH6')
+                    future_info = await get_future_info(FIGI_NRH6)
             
             if not nrh6_orders:
                 print(f"Нет активных заявок NRH6")
