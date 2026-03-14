@@ -437,6 +437,8 @@ async def balance_strategy():
         # Группируем заявки по ценам
         existing_prices = {}
         for order in nrh6_orders:
+            figi = order.get('figi')
+            print(f"DEBUG: order figi = {figi}, ticker = {order.get('ticker')}")
             # Цена заявки в initialOrderPrice (в рублях за 100 лотов)
             price_val = order.get('initialOrderPrice', {})
             if price_val:
