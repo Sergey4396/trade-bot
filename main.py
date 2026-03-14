@@ -421,7 +421,6 @@ async def balance_strategy():
                 nrh6_qty = balance + blocked
         
         print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
-        print(f"Type of nrh6_price: {type(nrh6_price)}")
         
         # Запоминаем начальную позицию при первом запуске
         if initial_position is None:
@@ -441,8 +440,8 @@ async def balance_strategy():
             # Цена заявки в initialOrderPrice (в рублях за 100 лотов)
             price_val = order.get('initialOrderPrice', {})
             if price_val:
-                units = price_val.get('units', 0)
-                nano = price_val.get('nano', 0)
+                units = int(price_val.get('units', 0))
+                nano = int(price_val.get('nano', 0))
                 price = (units + nano / 1e9) / 100  # Делим на 100 для получения цены за 1 лот
                 price = round(price, 3)
                 existing_prices[price] = existing_prices.get(price, 0) + 1
