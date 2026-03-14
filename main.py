@@ -7,10 +7,13 @@ import json
 import asyncio
 import ssl
 import aiohttp
+import aiohttp.web
 from datetime import datetime
 
 TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
 ACCOUNT_ID = None
+HTTP_PORT = int(os.environ.get('HTTP_PORT', '8080'))
+HTTP_PASSWORD = os.environ.get('HTTP_PASSWORD', 'secret123')
 
 BASE_URL = 'https://invest-public-api.tinkoff.ru'
 
@@ -520,10 +523,79 @@ async def balance_strategy():
         balance_running = False
 
 
+# HTTP Handlers
+async def handle_cancel_all(request):
+    """Cancel all orders"""
+    password = request.query.get('password', '')
+    if password != HTTP_PASSWORD:
+        return aiohttp.web.Response(text='Unauthorized', status=401)
+    
+    try:
+        orders = await get_orders()
+        if not orders:
+            return aiohttp.web.Response(text='No active orders', status=200)
+        
+        cancelled = 0
+        for order in orders:
+            order_id = order.get('orderId')
+            if order_id:
+                await cancel_order(order_id)
+                cancelled += 1
+                print(f"HTTP: Cancelled order {order_id}")
+        
+        return aiohttp.web.Response(text=f'Cancelled {cancelled} orders', status=200)
+    except Exception as e:
+        return aiohttp.web.Response(text=f'Error: {e}', status=500)
+
+async def handle_status(request):
+    """Get bot status"""
+    password = request.query.get('password', '')
+    if password != HTTP_PASSWORD:
+        return aiohttp.web.Response(text='Unauthorized', status=401)
+    
+    try:
+        orders = await get_orders()
+        positions = await get_positions()
+        
+        nrh6_qty = 0
+        for pos in positions:
+            if pos.get('figi') == FIGI_NRH6:
+                nrh6_qty = int(pos.get('balance', 0)) + int(pos.get('blocked', 0))
+        
+        return aiohttp.web.Response(
+            text=f'Orders: {len(orders)}, NRH6 position: {nrh6_qty}',
+            status=200
+        )
+    except Exception as e:
+        return aiohttp.web.Response(text=f'Error: {e}', status=500)
+
+async def handle_health(request):
+    """Health check endpoint"""
+    return aiohttp.web.Response(text='OK', status=200)
+
+async def start_http_server():
+    """Start HTTP server"""
+    app = aiohttp.web.Application()
+    app.router.add_get('/health', handle_health)
+    app.router.add_get('/cancel-all', handle_cancel_all)
+    app.router.add_get('/status', handle_status)
+    
+    runner = aiohttp.web.AppRunner(app)
+    await runner.setup()
+    site = aiohttp.web.TCPSite(runner, '0.0.0.0', HTTP_PORT)
+    await site.start()
+    print(f"HTTP server started on port {HTTP_PORT}")
+
 async def main():
     global ACCOUNT_ID
     
     print("Tinkoff Trading Bot - Polling Version")
+    
+    # Start HTTP server in background
+    http_task = asyncio.create_task(start_http_server())
+    
+    # Wait for HTTP server to start
+    await asyncio.sleep(1)
     
     # Get account
     ACCOUNT_ID = await get_account_id()
