@@ -181,6 +181,22 @@ async def cancel_order(order_id):
         async with session.post(url, json={'accountId': ACCOUNT_ID, 'orderId': order_id}, headers=headers) as resp:
             return await resp.json()
 
+async def get_order_state(order_id):
+    """Get order state - may return price in points for futures"""
+    global ACCOUNT_ID
+    if not ACCOUNT_ID:
+        await get_account_id()
+    
+    url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/GetOrderState'
+    headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
+    
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, json={'accountId': ACCOUNT_ID, 'orderId': order_id}, headers=headers) as resp:
+            data = await resp.json()
+            print(f"DEBUG GetOrderState: {data}")
+            return data
+
 async def post_order(figi, quantity, direction, price=None, order_type='ORDER_TYPE_LIMIT'):
     global ACCOUNT_ID
     if not ACCOUNT_ID:
@@ -417,6 +433,12 @@ async def monitor_orders():
                 
                 direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
                 print(f"  {ticker}: {direction_ru} {qty} @ {price_str} {currency} (id: {order_id})")
+                
+                # Для NRH6 дополнительно получаем состояние заявки (может быть в пунктах)
+                if ticker == 'NRH6':
+                    full_order_id = o.get('orderId', '')
+                    if full_order_id:
+                        order_state = await get_order_state(full_order_id)
             
             if not nrh6_orders:
                 print(f"Нет активных заявок NRH6")
