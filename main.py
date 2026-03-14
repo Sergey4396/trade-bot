@@ -328,12 +328,22 @@ async def place_counter_order(trade_info):
 
 def format_price(price_dict):
     """Format price from units/nano"""
+    if isinstance(price_dict, str):
+        return price_dict
     units = price_dict.get('units', 0)
     nano = price_dict.get('nano', 0)
     # nano is in nanounits (10^-9), divide by 10^6 to get 3 decimal places
     # e.g., 3.091 has nano=91000000, 3.910 has nano=910000000
     first_three = nano // 1000000
     return f"{units}.{str(first_three).zfill(3)}"
+
+def parse_price(price_dict):
+    """Parse price to float from units/nano"""
+    if isinstance(price_dict, (int, float)):
+        return float(price_dict)
+    units = price_dict.get('units', 0)
+    nano = price_dict.get('nano', 0)
+    return units + nano / 1e9
 
 async def print_status():
     """Print current status"""
@@ -381,7 +391,7 @@ async def balance_strategy():
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 60:
+    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
         print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
     
@@ -427,7 +437,7 @@ async def balance_strategy():
         # Группируем заявки по ценам
         existing_prices = {}
         for order in nrh6_orders:
-            price = float(format_price(order.get('price', {})))
+            price = round(parse_price(order.get('price', {})), 3)
             existing_prices[price] = existing_prices.get(price, 0) + 1
         
         print(f"Существующих заявок: {len(nrh6_orders)}, цены: {list(existing_prices.keys())}")
@@ -443,20 +453,15 @@ async def balance_strategy():
         # Определяем базовую цену (центр текущего диапазона)
         base_price = round(nrh6_price - (nrh6_price % step), 3)
         
-        print(f"Базовая цена: {base_price}, диапазон: {current_range}")
+        print(f"Базовая цена: {base_price}, позиция: {current_range}, начальная: {initial_position}")
         
-        # Выставляем заявки для каждого диапазона
-        # Для диапазона i нужно: max(1, current_range - i + 1) лотов
-        # Но фактически мы выставляем по 1 лоту на each 0.010 step
+        # Диапазон вокруг начальной позиции
+        range_around = 10  # +/- 10 уровней
         
-        # Диапазон позиций: от 1 до 60
-        min_range = 1
-        max_range = 60
-        
-        # Выставляем заявки от текущего диапазона вниз (покупки)
-        for i in range(current_range - 1, min_range - 1, -1):
+        # Выставляем заявки от initial_position вниз (покупки)
+        for i in range(initial_position - 1, max(0, initial_position - range_around - 1), -1):
             # Цена для этого диапазона
-            price = base_price - step * (current_range - i)
+            price = base_price - step * (initial_position - 1 - i)
             price = round(price, 3)
             
             # Пропускаем цену последней сделки
@@ -480,10 +485,10 @@ async def balance_strategy():
                 except Exception as e:
                     print(f"Исключение: {str(e)[:50]}")
         
-        # Выставляем заявки от текущего диапазона вверх (продажи)
-        for i in range(current_range + 1, max_range + 1):
+        # Выставляем заявки от initial_position вверх (продажи)
+        for i in range(initial_position + 1, initial_position + range_around + 1):
             # Цена для этого диапазона
-            price = base_price + step * (i - current_range)
+            price = base_price + step * (i - initial_position)
             price = round(price, 3)
             
             # Пропускаем цену последней сделки
