@@ -515,9 +515,27 @@ async def monitor_orders():
                 print(f"  {bid_usd:<14} {bid_rub:<9} | {ask_usd:<14} {ask_rub}")
             
             print(f"\n=== Наши заявки ({len(nrh6_orders)}) ===")
+            
+            # Создаём список цен из стакана для поиска
+            bid_prices = []
+            for b in bids:
+                b_price_usd = float(format_price(b.get('price', {})))
+                b_price_rub = usd_to_rub_val(b_price_usd) if usd_to_rub else None
+                if b_price_rub:
+                    bid_prices.append((b_price_usd, b_price_rub, 'BID'))
+            
+            ask_prices = []
+            for a in asks:
+                a_price_usd = float(format_price(a.get('price', {})))
+                a_price_rub = usd_to_rub_val(a_price_usd) if usd_to_rub else None
+                if a_price_rub:
+                    ask_prices.append((a_price_usd, a_price_rub, 'ASK'))
+            
+            all_prices = sorted(bid_prices + ask_prices, key=lambda x: x[1])
+            
             for o in nrh6_orders:
                 direction = o.get('direction', 'UNKNOWN')
-                qty = o.get('quantity', 0)
+                qty = int(o.get('quantity', 0))
                 price_val = o.get('initialOrderPrice', {})
                 order_id = o.get('orderId', '')[:10]
                 
@@ -525,8 +543,23 @@ async def monitor_orders():
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
                     rub_price = units + nano / 1e9
+                    
+                    # Ищем ближайшую цену в стакане
+                    closest_usd = None
+                    closest_type = ""
+                    min_diff = float('inf')
+                    for usd, rub, typ in all_prices:
+                        diff = abs(rub_price - rub)
+                        if diff < min_diff:
+                            min_diff = diff
+                            closest_usd = usd
+                            closest_type = typ
+                    
                     direction_ru = 'BUY ' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
-                    print(f"  [{direction_ru}] {qty} лот @ {rub_price:.2f} RUB  (id:{order_id})")
+                    if closest_usd and min_diff < 0.5:
+                        print(f"  [{direction_ru}] {qty} лот @ {rub_price:.2f} RUB  => {closest_usd:.3f} USD ({closest_type})")
+                    else:
+                        print(f"  [{direction_ru}] {qty} лот @ {rub_price:.2f} RUB  (не найдено в стакане)")
             
             if not nrh6_orders:
                 print("  (нет активных заявок)")
