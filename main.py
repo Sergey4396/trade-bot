@@ -434,21 +434,16 @@ async def balance_strategy():
         orders = await get_orders()
         nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
         
-        # Группируем заявки по ценам
-        existing_prices = {}
-        for order in nrh6_orders:
-            figi = order.get('figi')
-            print(f"DEBUG: order figi = {figi}, ticker = {order.get('ticker')}")
-            # Цена заявки в initialOrderPrice (в рублях за 100 лотов)
-            price_val = order.get('initialOrderPrice', {})
-            if price_val:
-                units = int(price_val.get('units', 0))
-                nano = int(price_val.get('nano', 0))
-                price = (units + nano / 1e9) / 100  # Делим на 100 для получения цены за 1 лот
-                price = round(price, 3)
-                existing_prices[price] = existing_prices.get(price, 0) + 1
+        # Просто проверяем общее количество заявок - не выставляем если их уже много
+        total_orders = len(nrh6_orders)
+        max_orders = 30  # Не более 30 заявок
         
-        print(f"Существующих заявок: {len(nrh6_orders)}, цены: {list(existing_prices.keys())}")
+        if total_orders >= max_orders:
+            print(f"Слишком много заявок: {total_orders}, пропускаем")
+            balance_running = False
+            return
+        
+        print(f"Всего заявок: {total_orders}")
         
         # Получаем цену последней сделки для пропуска
         last_trade_price = await get_last_trade_price(FIGI_NRH6)
@@ -477,21 +472,16 @@ async def balance_strategy():
                 print(f"ПРОПУСК покупки {price}: последняя сделка была по {last_executed_price}")
                 continue
             
-            # Сколько заявок уже есть на эту цену
-            existing_count = existing_prices.get(price, 0)
-            
-            # Выставляем если нет заявки
-            if existing_count == 0:
-                print(f"Выставляю покупку: 1 @ {price}")
-                try:
-                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
-                    if 'orderId' in result:
-                        print(f"Результат: {result.get('orderId')}")
-                        orders_placed = True
-                    else:
-                        print(f"Ошибка: {result.get('message', result)[:50]}")
-                except Exception as e:
-                    print(f"Исключение: {str(e)[:50]}")
+            print(f"Выставляю покупку: 1 @ {price}")
+            try:
+                result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
+                if 'orderId' in result:
+                    print(f"Результат: {result.get('orderId')}")
+                    orders_placed = True
+                else:
+                    print(f"Ошибка: {result.get('message', result)[:50]}")
+            except Exception as e:
+                print(f"Исключение: {str(e)[:50]}")
         
         # Выставляем заявки от initial_position вверх (продажи)
         for i in range(initial_position + 1, initial_position + range_around + 1):
@@ -504,21 +494,16 @@ async def balance_strategy():
                 print(f"ПРОПУСК продажи {price}: последняя сделка была по {last_executed_price}")
                 continue
             
-            # Сколько заявок уже есть на эту цену
-            existing_count = existing_prices.get(price, 0)
-            
-            # Выставляем если нет заявки
-            if existing_count == 0:
-                print(f"Выставляю продажу: 1 @ {price}")
-                try:
-                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
-                    if 'orderId' in result:
-                        print(f"Результат: {result.get('orderId')}")
-                        orders_placed = True
-                    else:
-                        print(f"Ошибка: {result.get('message', result)[:50]}")
-                except Exception as e:
-                    print(f"Исключение: {str(e)[:50]}")
+            print(f"Выставляю продажу: 1 @ {price}")
+            try:
+                result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
+                if 'orderId' in result:
+                    print(f"Результат: {result.get('orderId')}")
+                    orders_placed = True
+                else:
+                    print(f"Ошибка: {result.get('message', result)[:50]}")
+            except Exception as e:
+                print(f"Исключение: {str(e)[:50]}")
         
         print("Балансная стратегия завершена")
         
