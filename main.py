@@ -407,9 +407,14 @@ async def monitor_orders():
                 if price_val:
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
-                    price = units + nano / 1e9
+                    price = units + nano / 1e6 / 1000
                     price = round(price, 3)
                     price_str = str(price)
+                    
+                    # Debug: show raw values
+                    first_three = nano // 1000000
+                    raw_str = f"{units}.{str(first_three).zfill(3)}"
+                    print(f"    DEBUG: units={units}, nano={nano}, raw={raw_str}")
                 else:
                     price_str = "?"
                 
