@@ -463,36 +463,9 @@ async def monitor_orders():
             orders = await get_orders()
             nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
             
-            # Собираем цены наших заявок из стакана (в USD/пунктах)
-            our_bids = {}  # price -> qty
-            our_asks = {}  # price -> qty
-            
-            for o in nrh6_orders:
-                price_val = o.get('initialOrderPrice', {})
-                direction = o.get('direction', 'UNKNOWN')
-                qty = int(o.get('quantity', 0))
-                
-                if price_val:
-                    units = int(price_val.get('units', 0))
-                    nano = int(price_val.get('nano', 0))
-                    # Конвертируем рубли в USD (делим на курс)
-                    # Курс ~ 80, получаем из стакана
-                    rub_price = units + nano / 1e9
-                    
-                    # Пытаемся найти ближайшую цену в стакане
-                    for bid in bids:
-                        bid_units = int(bid.get('price', {}).get('units', 0))
-                        bid_nano = int(bid.get('price', {}).get('nano', 0))
-                        bid_price = bid_units + bid_nano / 1e6 / 1000
-                        
-                        # Если цена в стакане примерно совпадает
-                        if bid_price > 0 and abs(rub_price / bid_price - 80) < 5:
-                            our_bids[bid_price] = our_bids.get(bid_price, 0) + qty
-                            break
-            
-            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Стакан NRH6 ===")
-            print("BID (покупка)  | ASK (продажа)")
-            for i in range(min(10, max(len(bids), len(asks)))):
+            print(f"\n=== {datetime.now().strftime('%H:%M:%S')} Стакан NRH6 (USD) ===")
+            print("         BID (покупка)        |        ASK (продажа)")
+            for i in range(min(15, max(len(bids), len(asks)))):
                 bid_line = ""
                 ask_line = ""
                 
@@ -500,29 +473,32 @@ async def monitor_orders():
                     b = bids[i]
                     b_price = float(format_price(b.get('price', {})))
                     b_qty = int(b.get('quantity', 0))
-                    b_marker = f"*{b_qty}" if b_price in our_bids else ""
-                    bid_line = f"{b_price:.3f} ({b_qty}{b_marker})"
+                    bid_line = f"{b_price:.3f}  ({b_qty:>4})"
                 
                 if i < len(asks):
                     a = asks[i]
                     a_price = float(format_price(a.get('price', {})))
                     a_qty = int(a.get('quantity', 0))
-                    a_marker = f"*{a_qty}" if a_price in our_asks else ""
-                    ask_line = f"{a_price:.3f} ({a_qty}{a_marker})"
+                    ask_line = f"{a_price:.3f}  ({a_qty:>4})"
                 
-                print(f"  {bid_line:<18} | {ask_line}")
+                print(f"  {bid_line:<22} | {ask_line}")
             
-            print(f"\nНаши заявки: {len(nrh6_orders)}")
+            print(f"\n=== Наши заявки ({len(nrh6_orders)}) ===")
             for o in nrh6_orders:
                 direction = o.get('direction', 'UNKNOWN')
                 qty = o.get('quantity', 0)
                 price_val = o.get('initialOrderPrice', {})
+                order_id = o.get('orderId', '')[:10]
+                
                 if price_val:
                     units = int(price_val.get('units', 0))
                     nano = int(price_val.get('nano', 0))
                     rub_price = units + nano / 1e9
-                    direction_ru = 'BUY' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
-                    print(f"  {direction_ru}: {qty} @ {rub_price:.2f} RUB")
+                    direction_ru = 'BUY ' if direction == 'ORDER_DIRECTION_BUY' else 'SELL'
+                    print(f"  [{direction_ru}] {qty} лот @ {rub_price:.2f} RUB  (id:{order_id})")
+            
+            if not nrh6_orders:
+                print("  (нет активных заявок)")
             
             # Позиция
             positions = await get_positions()
