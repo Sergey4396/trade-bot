@@ -4,9 +4,9 @@ import asyncio
 import aiohttp
 import aiohttp.web
 from datetime import datetime
-from api import TinkoffAPI, init as init_api
-from handlers import init as init_handlers, handle_health, handle_cancel_all, handle_status
-from balance_strategy import run_balance_strategy
+from tinkoff.api import TinkoffAPI, init as init_api
+from tinkoff.handlers import init as init_handlers, handle_health, handle_cancel_all, handle_status
+from tinkoff.balance_strategy import run_balance_strategy
 
 TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
 HTTP_PORT = int(os.environ.get('HTTP_PORT', '8080'))
