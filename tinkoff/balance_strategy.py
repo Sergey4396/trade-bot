@@ -1,6 +1,6 @@
 """
 Балансная стратегия
-Выставляет ±10 уровней от текущей цены, максимум 60 заявок
+Каждые 10 минут: удаляет все заявки и выставляет новые
 """
 import asyncio
 from datetime import datetime
@@ -8,9 +8,7 @@ from datetime import datetime
 # Настройки инструмента
 FIGI = 'FUTNGM032600'  # NRH6
 STEP = 0.010  # шаг цены
-MAX_ORDERS = 60  # макс. заявок
-RANGE_LEVELS = 10  # ± уровней
-MAX_PER_SIDE = 10  # макс. заявок на каждую сторону
+MAX_ORDERS = 60  # макс. заявок всего
 INTERVAL = 600  # интервал в секундах (10 минут)
 
 # Глобальные переменные
@@ -21,7 +19,11 @@ balance_running = False
 async def run_balance_strategy(api):
     """
     Запускает балансную стратегию
-    api - объект с методами: get_orders, get_positions, post_order, get_futures_price_by_figi
+    1. Получаем позицию
+    2. Получаем цену
+    3. Удаляем все заявки
+    4. Выставляем продажу (позиция - 1) заявок по ценам вверх
+    5. Выставляем покупку до 57 заявок по ценам вниз
     """
     global last_balance_time, balance_running
     
@@ -35,12 +37,14 @@ async def run_balance_strategy(api):
         return
     
     balance_running = True
-    orders_placed = False
-    total_orders = 0
     
     try:
         now = datetime.now()
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
+        
+        # Получаем позицию
+        position = await api.get_position(FIGI)
+        print(f"Позиция: {position}")
         
         # Получаем цену из стакана
         price = await api.get_futures_price(FIGI)
@@ -50,70 +54,61 @@ async def run_balance_strategy(api):
             balance_running = False
             return
         
-        # Получаем текущие заявки
+        print(f"Текущая цена: {price}")
+        
+        # Удаляем все существующие заявки
+        print("Удаляю все заявки...")
         orders = await api.get_orders(FIGI)
-        total_orders = len(orders)
+        cancelled = 0
+        for order in orders:
+            order_id = order.get('orderId')
+            if order_id:
+                await api.cancel_order(order_id)
+                cancelled += 1
+        print(f"Удалено заявок: {cancelled}")
         
-        print(f"{FIGI}: цена={price}, заявок={total_orders}")
+        # Вычисляем базовую цену
+        base_price = round(price - (price % STEP), 3)
         
-        # Если заявок уже MAX_ORDERS - не выставляем новые
-        if total_orders >= MAX_ORDERS:
-            print(f"Уже {total_orders} заявок, пропускаем")
-            balance_running = False
-            return
+        # Продажа: выставляем (позиция - 1) заявок, чтобы остался 1 лот
+        sell_count = max(0, position - 1)
+        # Но не более чем позволяет MAX_ORDERS
+        sell_count = min(sell_count, MAX_ORDERS - 1)
         
-        step = STEP
-        base_price = round(price - (price % step), 3)
-        
-        available = MAX_ORDERS - total_orders
-        
-        # Покупки (вниз от цены)
-        buy_count = min(MAX_PER_SIDE, available)
-        print(f"Выставляю {buy_count} покупок...")
-        for i in range(1, buy_count + 1):
-            price = base_price - step * i
-            price = round(price, 3)
-            print(f"  BUY: 1 @ {price}")
+        print(f"Выставляю {sell_count} заявок на продажу...")
+        for i in range(1, sell_count + 1):
+            sell_price = base_price + STEP * i
+            sell_price = round(sell_price, 3)
+            print(f"  SELL: 1 @ {sell_price}")
             try:
-                result = await api.post_order(FIGI, 1, 'ORDER_DIRECTION_BUY', price)
+                result = await api.post_order(FIGI, 1, 'ORDER_DIRECTION_SELL', sell_price)
                 if 'orderId' in result:
                     print(f"    OK: {result.get('orderId')}")
-                    orders_placed = True
-                    total_orders += 1
                 else:
                     print(f"    Ошибка: {result.get('message', str(result))[:50]}")
             except Exception as e:
                 print(f"    Исключение: {str(e)[:50]}")
-            
-            if total_orders >= MAX_ORDERS:
-                print(f"Достигли {total_orders} заявок, останавливаемся")
-                break
         
-        # Продажи (вверх от цены)
-        available = MAX_ORDERS - total_orders
-        if available > 0:
-            sell_count = min(MAX_PER_SIDE, available)
-            print(f"Выставляю {sell_count} продаж...")
-            for i in range(1, sell_count + 1):
-                price = base_price + step * i
-                price = round(price, 3)
-                print(f"  SELL: 1 @ {price}")
-                try:
-                    result = await api.post_order(FIGI, 1, 'ORDER_DIRECTION_SELL', price)
-                    if 'orderId' in result:
-                        print(f"    OK: {result.get('orderId')}")
-                        orders_placed = True
-                        total_orders += 1
-                    else:
-                        print(f"    Ошибка: {result.get('message', str(result))[:50]}")
-                except Exception as e:
-                    print(f"    Исключение: {str(e)[:50]}")
-                
-                if total_orders >= MAX_ORDERS:
-                    print(f"Достигли {total_orders} заявок, останавливаемся")
-                    break
+        # Покупка: выставляем до 57 заявок (60 - проданные)
+        buy_count = MAX_ORDERS - sell_count
+        # Максимум 57 на покупку
+        buy_count = min(buy_count, 57)
         
-        print(f"Итого заявок: {total_orders}")
+        print(f"Выставляю {buy_count} заявок на покупку...")
+        for i in range(1, buy_count + 1):
+            buy_price = base_price - STEP * i
+            buy_price = round(buy_price, 3)
+            print(f"  BUY: 1 @ {buy_price}")
+            try:
+                result = await api.post_order(FIGI, 1, 'ORDER_DIRECTION_BUY', buy_price)
+                if 'orderId' in result:
+                    print(f"    OK: {result.get('orderId')}")
+                else:
+                    print(f"    Ошибка: {result.get('message', str(result))[:50]}")
+            except Exception as e:
+                print(f"    Исключение: {str(e)[:50]}")
+        
+        print("Балансная стратегия завершена")
         
     except Exception as e:
         import traceback
