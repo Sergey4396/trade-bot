@@ -580,130 +580,87 @@ async def monitor_orders():
             await asyncio.sleep(10)
 
 async def balance_strategy():
-    """Стратегия удержания позиции NRH6 - выставляем заявки в каждом диапазоне"""
-    global last_balance_time, balance_running, last_trade_direction, last_executed_price, initial_position
+    """Простая балансная стратегия - выставляем ±10 уровней от текущей цены"""
+    global last_balance_time, balance_running
     from datetime import datetime
     
     if balance_running:
         print("Балансная стратегия уже выполняется, пропускаю")
         return
     
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 60:
-        print(f"Балансная стратегия пропущена, прошло только {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
+    # Проверяем каждые 10 минут (600 секунд)
+    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < 600:
+        print(f"Балансная стратегия пропущена, прошло {(datetime.now() - last_balance_time).total_seconds():.0f} сек")
         return
     
     balance_running = True
     orders_placed = False
+    total_orders = 0
     
     try:
         now = datetime.now()
-        
         print(f"\n=== {now.strftime('%H:%M:%S')} === Balance Strategy")
         
-        # Получаем текущую цену
+        # Получаем текущую цену из стакана
         nrh6_price = await get_futures_price_by_figi(FIGI_NRH6)
         
         if not nrh6_price:
-            print("Не удалось получить цену NRH6 через GetOrderBook")
+            print("Не удалось получить цену NRH6")
             balance_running = False
             return
-        
-        # Получаем позицию
-        positions = await get_positions()
-        nrh6_qty = 0
-        for pos in positions:
-            if pos.get('figi') == FIGI_NRH6:
-                balance = int(pos.get('balance', 0))
-                blocked = int(pos.get('blocked', 0))
-                nrh6_qty = balance + blocked
-        
-        print(f"NRH6: цена={nrh6_price}, позиция={nrh6_qty}")
-        
-        # Запоминаем начальную позицию при первом запуске
-        if initial_position is None:
-            initial_position = nrh6_qty
-            print(f"Запоминаю начальную позицию: {initial_position}")
-        
-        # Текущий диапазон = позиция
-        current_range = nrh6_qty
         
         # Получаем существующие заявки
         orders = await get_orders()
         nrh6_orders = [o for o in orders if o.get('figi') == FIGI_NRH6]
-        
-        # Просто проверяем общее количество заявок - не выставляем если их уже много
         total_orders = len(nrh6_orders)
-        max_orders = 30  # Не более 30 заявок
-        orders_to_place = 20  # 10 покупок + 10 продаж
         
-        if total_orders + orders_to_place > max_orders:
-            print(f"Слишком много заявок: {total_orders} + {orders_to_place} > {max_orders}, пропускаем")
+        print(f"NRH6: цена={nrh6_price}, заявок={total_orders}")
+        
+        # Если заявок уже 60 - не выставляем новые
+        if total_orders >= 60:
+            print(f"Уже {total_orders} заявок, пропускаем")
             balance_running = False
             return
         
-        print(f"Всего заявок: {total_orders}")
-        
-        # Получаем цену последней сделки для пропуска
-        last_trade_price = await get_last_trade_price(FIGI_NRH6)
-        if last_trade_price:
-            last_executed_price = last_trade_price
-            print(f"Последняя сделка по цене: {last_executed_price}")
-        
-        step = 0.010
-        
-        # Определяем базовую цену (центр текущего диапазона)
-        base_price = round(nrh6_price - (nrh6_price % step), 3)
-        
-        print(f"Базовая цена: {base_price}, позиция: {current_range}, начальная: {initial_position}")
-        
-        # Диапазон вокруг начальной позиции
-        range_around = 10  # +/- 10 уровней
-        
-        # Выставляем заявки от initial_position вниз (покупки)
-        for i in range(initial_position - 1, max(0, initial_position - range_around - 1), -1):
-            # Цена для этого диапазона
-            price = base_price - step * (initial_position - 1 - i)
-            price = round(price, 3)
+        # Если меньше 1 заявки - выставляем
+        if total_orders < 1:
+            step = 0.010
+            base_price = round(nrh6_price - (nrh6_price % step), 3)
+            range_levels = 10  # ±10 уровней
             
-            # Пропускаем цену последней сделки
-            if last_executed_price and abs(price - last_executed_price) < 0.001:
-                print(f"ПРОПУСК покупки {price}: последняя сделка была по {last_executed_price}")
-                continue
+            # Выставляем покупки (вниз от цены)
+            for i in range(1, range_levels + 1):
+                price = base_price - step * i
+                price = round(price, 3)
+                print(f"Выставляю покупку: 1 @ {price}")
+                try:
+                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
+                    if 'orderId' in result:
+                        print(f"  OK: {result.get('orderId')}")
+                        orders_placed = True
+                    else:
+                        print(f"  Ошибка: {result.get('message', str(result))[:50]}")
+                except Exception as e:
+                    print(f"  Исключение: {str(e)[:50]}")
             
-            print(f"Выставляю покупку: 1 @ {price}")
-            try:
-                result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
-                if 'orderId' in result:
-                    print(f"Результат: {result.get('orderId')}")
-                    orders_placed = True
-                else:
-                    print(f"Ошибка: {result.get('message', result)[:50]}")
-            except Exception as e:
-                print(f"Исключение: {str(e)[:50]}")
-        
-        # Выставляем заявки от initial_position вверх (продажи)
-        for i in range(initial_position + 1, initial_position + range_around + 1):
-            # Цена для этого диапазона
-            price = base_price + step * (i - initial_position)
-            price = round(price, 3)
+            # Выставляем продажи (вверх от цены)
+            for i in range(1, range_levels + 1):
+                price = base_price + step * i
+                price = round(price, 3)
+                print(f"Выставляю продажу: 1 @ {price}")
+                try:
+                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
+                    if 'orderId' in result:
+                        print(f"  OK: {result.get('orderId')}")
+                        orders_placed = True
+                    else:
+                        print(f"  Ошибка: {result.get('message', str(result))[:50]}")
+                except Exception as e:
+                    print(f"  Исключение: {str(e)[:50]}")
             
-            # Пропускаем цену последней сделки
-            if last_executed_price and abs(price - last_executed_price) < 0.001:
-                print(f"ПРОПУСК продажи {price}: последняя сделка была по {last_executed_price}")
-                continue
-            
-            print(f"Выставляю продажу: 1 @ {price}")
-            try:
-                result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
-                if 'orderId' in result:
-                    print(f"Результат: {result.get('orderId')}")
-                    orders_placed = True
-                else:
-                    print(f"Ошибка: {result.get('message', result)[:50]}")
-            except Exception as e:
-                print(f"Исключение: {str(e)[:50]}")
-        
-        print("Балансная стратегия завершена")
+            print("Балансная стратегия завершена")
+        else:
+            print(f"Есть {total_orders} заявок, пропускаем выставление")
         
     except Exception as e:
         import traceback
@@ -711,11 +668,9 @@ async def balance_strategy():
         print(traceback.format_exc())
     
     finally:
-        if orders_placed:
+        if orders_placed or total_orders < 1:
             last_balance_time = datetime.now()
-            print(f"Заявки выставлены, таймер обновлён")
-        else:
-            print(f"Заявки НЕ выставлены, таймер НЕ обновлён - повтор через 10 сек")
+            print(f"Таймер обновлён")
         balance_running = False
 
 
@@ -800,9 +755,23 @@ async def main():
     # Print initial status
     await print_status()
     
-    # Запускаем мониторинг (только смотрим, не выставляем)
-    # Это бесконечный цикл, дальше код не выполняется
-    await monitor_orders()
+    # Основной цикл - балансная стратегия каждые 10 минут + мониторинг
+    while True:
+        try:
+            # Запускаем балансную стратегию
+            await balance_strategy()
+            
+            # Мониторинг каждые 10 секунд
+            for _ in range(60):  # 60 * 10 = 10 минут
+                await asyncio.sleep(10)
+                await print_status()
+                
+        except KeyboardInterrupt:
+            print("\nStopping...")
+            break
+        except Exception as e:
+            print(f"Error: {e}")
+            await asyncio.sleep(10)
 
 if __name__ == '__main__':
     asyncio.run(main())
