@@ -6,8 +6,8 @@ BASE_URL = 'https://invest-public-api.tbank.ru'
 ssl_context = None
 
 
+# Инициализация API: токен и базовый URL
 def init(token, base_url='https://invest-public-api.tbank.ru'):
-    """Инициализация API: токен и базовый URL"""
     global TOKEN, BASE_URL, ssl_context
     import ssl
     TOKEN = token
@@ -17,33 +17,31 @@ def init(token, base_url='https://invest-public-api.tbank.ru'):
     ssl_context.verify_mode = ssl.CERT_NONE
 
 
+# Обёртка над Tinkoff Invest API
 class TinkoffAPI:
-    """Обёртка над Tinkoff Invest API"""
     
     def __init__(self):
         self.account_id = None
     
+    # Внутренний метод для HTTP запросов к API
     async def _request(self, method, url, data=None):
-        """Внутренний метод для HTTP запросов к API"""
         headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(url, json=data or {}, headers=headers) as resp:
                 return await resp.json()
     
+    # Получить ID счёта
     async def get_account_id(self):
-        """Получить ID счёта"""
         data = await self._request('GetAccounts', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts')
         accounts = data.get('accounts', [])
         if accounts:
             self.account_id = accounts[0]['id']
         return self.account_id
     
+    # Получить список активных заявок
+    # figi: если указан - фильтрует только по этому инструменту
     async def get_orders(self, figi=None):
-        """
-        Получить список активных заявок
-        figi: если указан - фильтрует только по этому инструменту
-        """
         if not self.account_id:
             await self.get_account_id()
         data = await self._request('GetOrders', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/GetOrders', {'accountId': self.account_id})
@@ -52,20 +50,18 @@ class TinkoffAPI:
             orders = [o for o in orders if o.get('figi') == figi]
         return orders
     
+    # Отменить заявку по ID
     async def cancel_order(self, order_id):
-        """Отменить заявку по ID"""
         if not self.account_id:
             await self.get_account_id()
         return await self._request('CancelOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/CancelOrder', {'accountId': self.account_id, 'orderId': order_id})
     
+    # Выставить заявку
+    # figi: идентификатор инструмента
+    # quantity: количество лотов
+    # direction: 'ORDER_DIRECTION_BUY' или 'ORDER_DIRECTION_SELL'
+    # price: цена (для лимитных заявок)
     async def post_order(self, figi, quantity, direction, price=None):
-        """
-        Выставить заявку
-        figi: идентификатор инструмента
-        quantity: количество лотов
-        direction: 'ORDER_DIRECTION_BUY' или 'ORDER_DIRECTION_SELL'
-        price: цена (для лимитных заявок)
-        """
         if not self.account_id:
             await self.get_account_id()
         order_data = {'figi': figi, 'quantity': str(quantity), 'direction': direction, 'accountId': self.account_id, 'orderType': 'ORDER_TYPE_LIMIT'}
@@ -75,25 +71,21 @@ class TinkoffAPI:
             order_data['price'] = {'units': int(parts[0]), 'nano': int(parts[1].ljust(9, '0')[:9])}
         return await self._request('PostOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', order_data)
     
+    # Получить цену фьючерса из стакана (среднее между bid и ask)
     async def get_futures_price(self, figi):
-        """
-        Получить цену фьючерса из стакана (среднее между bid и ask)
-        """
         data = await self._request('GetOrderBook', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook', {'figi': figi, 'depth': 1})
         bids, asks = data.get('bids', []), data.get('asks', [])
         if bids and asks:
             return (self._parse_price(bids[0].get('price', {})) + self._parse_price(asks[0].get('price', {}))) / 2
         return None
     
+    # Конвертировать цену из units/nano в float
     def _parse_price(self, price_dict):
-        """Конвертировать цену из units/nano в float"""
         units, nano = price_dict.get('units', 0), price_dict.get('nano', 0)
         return float(f"{units}.{str(nano // 1000000).zfill(3)}")
     
+    # Получить позицию по инструменту (баланс + заблокировано)
     async def get_position(self, figi):
-        """
-        Получить позицию по инструменту (баланс + заблокировано)
-        """
         if not self.account_id:
             await self.get_account_id()
         data = await self._request('GetPositions', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetPositions', {'accountId': self.account_id})
@@ -102,8 +94,8 @@ class TinkoffAPI:
                 return int(pos.get('balance', 0)) + int(pos.get('blocked', 0))
         return 0
     
+    # Получить текстовый статус (для HTTP)
     async def status_text(self, figi):
-        """Получить текстовый статус (для HTTP)"""
         orders = await self.get_orders(figi)
         pos = await self.get_position(figi)
         return f'Orders: {len(orders)}, position: {pos}'
