@@ -15,7 +15,6 @@ HTTP_PASSWORD = os.environ.get('HTTP_PASSWORD', 'secret123')
 init_api(TOKEN)
 init_handlers(HTTP_PASSWORD)
 api = TinkoffAPI()
-FIGI_NRH6 = api.FIGI_NRH6
 
 
 async def main():
@@ -30,6 +29,7 @@ async def main():
     
     await api.get_account_id()
     print(f"Account ID: {api.account_id}")
+    figi = api.FIGI_NRH6
     
     while True:
         try:
@@ -37,7 +37,7 @@ async def main():
             for _ in range(60):
                 await asyncio.sleep(10)
                 print(f"=== {datetime.now().strftime('%H:%M:%S')} ===")
-                print(f"NRH6: заявок={len(await api.get_orders(FIGI_NRH6))}, позиция={await api.get_position(FIGI_NRH6)}")
+                print(f"заявок={len(await api.get_orders(figi))}, позиция={await api.get_position(figi)}")
         except KeyboardInterrupt:
             break
         except Exception as e:
