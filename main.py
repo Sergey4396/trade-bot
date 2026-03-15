@@ -622,45 +622,63 @@ async def balance_strategy():
             balance_running = False
             return
         
-        # Если меньше 1 заявки - выставляем
-        if total_orders < 1:
-            step = 0.010
-            base_price = round(nrh6_price - (nrh6_price % step), 3)
-            range_levels = 10  # ±10 уровней
+        step = 0.010
+        base_price = round(nrh6_price - (nrh6_price % step), 3)
+        range_levels = 10  # ±10 уровней
+        max_orders_per_side = 10  # макс. 10 в каждую сторону
+        
+        # Вычисляем сколько можем выставить
+        available = 60 - total_orders
+        
+        # Выставляем покупки (вниз от цены)
+        buy_count = min(max_orders_per_side, available)
+        print(f"Выставляю {buy_count} покупок...")
+        for i in range(1, buy_count + 1):
+            price = base_price - step * i
+            price = round(price, 3)
+            print(f"  BUY: 1 @ {price}")
+            try:
+                result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
+                if 'orderId' in result:
+                    print(f"    OK: {result.get('orderId')}")
+                    orders_placed = True
+                    total_orders += 1
+                else:
+                    print(f"    Ошибка: {result.get('message', str(result))[:50]}")
+            except Exception as e:
+                print(f"    Исключение: {str(e)[:50]}")
             
-            # Выставляем покупки (вниз от цены)
-            for i in range(1, range_levels + 1):
-                price = base_price - step * i
-                price = round(price, 3)
-                print(f"Выставляю покупку: 1 @ {price}")
-                try:
-                    result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_BUY', price)
-                    if 'orderId' in result:
-                        print(f"  OK: {result.get('orderId')}")
-                        orders_placed = True
-                    else:
-                        print(f"  Ошибка: {result.get('message', str(result))[:50]}")
-                except Exception as e:
-                    print(f"  Исключение: {str(e)[:50]}")
-            
-            # Выставляем продажи (вверх от цены)
-            for i in range(1, range_levels + 1):
+            # После каждой проверяем не достигли ли 60
+            if total_orders >= 60:
+                print(f"Достигли {total_orders} заявок, останавливаемся")
+                break
+        
+        # Выставляем продажи (вверх от цены)
+        available = 60 - total_orders
+        if available > 0:
+            sell_count = min(max_orders_per_side, available)
+            print(f"Выставляю {sell_count} продаж...")
+            for i in range(1, sell_count + 1):
                 price = base_price + step * i
                 price = round(price, 3)
-                print(f"Выставляю продажу: 1 @ {price}")
+                print(f"  SELL: 1 @ {price}")
                 try:
                     result = await post_order(FIGI_NRH6, 1, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result:
-                        print(f"  OK: {result.get('orderId')}")
+                        print(f"    OK: {result.get('orderId')}")
                         orders_placed = True
+                        total_orders += 1
                     else:
-                        print(f"  Ошибка: {result.get('message', str(result))[:50]}")
+                        print(f"    Ошибка: {result.get('message', str(result))[:50]}")
                 except Exception as e:
-                    print(f"  Исключение: {str(e)[:50]}")
-            
-            print("Балансная стратегия завершена")
-        else:
-            print(f"Есть {total_orders} заявок, пропускаем выставление")
+                    print(f"    Исключение: {str(e)[:50]}")
+                
+                # После каждой проверяем не достигли ли 60
+                if total_orders >= 60:
+                    print(f"Достигли {total_orders} заявок, останавливаемся")
+                    break
+        
+        print(f"Итого заявок: {total_orders}")
         
     except Exception as e:
         import traceback
@@ -668,9 +686,8 @@ async def balance_strategy():
         print(traceback.format_exc())
     
     finally:
-        if orders_placed or total_orders < 1:
-            last_balance_time = datetime.now()
-            print(f"Таймер обновлён")
+        last_balance_time = datetime.now()
+        print(f"Таймер обновлён")
         balance_running = False
 
 
