@@ -17,8 +17,6 @@ def init(token, base_url='https://invest-public-api.tbank.ru'):
 
 
 class TinkoffAPI:
-    FIGI_NRH6 = 'FUTNGM032600'
-    
     def __init__(self):
         self.account_id = None
     
