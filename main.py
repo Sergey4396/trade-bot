@@ -6,7 +6,7 @@ import aiohttp.web
 from datetime import datetime
 from tinkoff.api import TinkoffAPI, init as init_api
 from tinkoff.handlers import init as init_handlers, handle_health, handle_cancel_all, handle_status
-from tinkoff.balance_strategy import run_balance_strategy
+from tinkoff.balance_strategy import run_balance_strategy, FIGI
 
 TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
 HTTP_PORT = int(os.environ.get('HTTP_PORT', '8080'))
@@ -29,7 +29,7 @@ async def main():
     
     await api.get_account_id()
     print(f"Account ID: {api.account_id}")
-    figi = api.FIGI_NRH6
+    figi = FIGI
     
     while True:
         try:

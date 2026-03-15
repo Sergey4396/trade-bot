@@ -7,6 +7,7 @@ ssl_context = None
 
 
 def init(token, base_url='https://invest-public-api.tbank.ru'):
+    """Инициализация API: токен и базовый URL"""
     global TOKEN, BASE_URL, ssl_context
     import ssl
     TOKEN = token
@@ -17,10 +18,13 @@ def init(token, base_url='https://invest-public-api.tbank.ru'):
 
 
 class TinkoffAPI:
+    """Обёртка над Tinkoff Invest API"""
+    
     def __init__(self):
         self.account_id = None
     
     async def _request(self, method, url, data=None):
+        """Внутренний метод для HTTP запросов к API"""
         headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         async with aiohttp.ClientSession(connector=connector) as session:
@@ -28,6 +32,7 @@ class TinkoffAPI:
                 return await resp.json()
     
     async def get_account_id(self):
+        """Получить ID счёта"""
         data = await self._request('GetAccounts', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts')
         accounts = data.get('accounts', [])
         if accounts:
@@ -35,6 +40,10 @@ class TinkoffAPI:
         return self.account_id
     
     async def get_orders(self, figi=None):
+        """
+        Получить список активных заявок
+        figi: если указан - фильтрует только по этому инструменту
+        """
         if not self.account_id:
             await self.get_account_id()
         data = await self._request('GetOrders', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/GetOrders', {'accountId': self.account_id})
@@ -44,11 +53,19 @@ class TinkoffAPI:
         return orders
     
     async def cancel_order(self, order_id):
+        """Отменить заявку по ID"""
         if not self.account_id:
             await self.get_account_id()
         return await self._request('CancelOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/CancelOrder', {'accountId': self.account_id, 'orderId': order_id})
     
     async def post_order(self, figi, quantity, direction, price=None):
+        """
+        Выставить заявку
+        figi: идентификатор инструмента
+        quantity: количество лотов
+        direction: 'ORDER_DIRECTION_BUY' или 'ORDER_DIRECTION_SELL'
+        price: цена (для лимитных заявок)
+        """
         if not self.account_id:
             await self.get_account_id()
         order_data = {'figi': figi, 'quantity': str(quantity), 'direction': direction, 'accountId': self.account_id, 'orderType': 'ORDER_TYPE_LIMIT'}
@@ -59,6 +76,9 @@ class TinkoffAPI:
         return await self._request('PostOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', order_data)
     
     async def get_futures_price(self, figi):
+        """
+        Получить цену фьючерса из стакана (среднее между bid и ask)
+        """
         data = await self._request('GetOrderBook', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook', {'figi': figi, 'depth': 1})
         bids, asks = data.get('bids', []), data.get('asks', [])
         if bids and asks:
@@ -66,10 +86,14 @@ class TinkoffAPI:
         return None
     
     def _parse_price(self, price_dict):
+        """Конвертировать цену из units/nano в float"""
         units, nano = price_dict.get('units', 0), price_dict.get('nano', 0)
         return float(f"{units}.{str(nano // 1000000).zfill(3)}")
     
     async def get_position(self, figi):
+        """
+        Получить позицию по инструменту (баланс + заблокировано)
+        """
         if not self.account_id:
             await self.get_account_id()
         data = await self._request('GetPositions', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetPositions', {'accountId': self.account_id})
@@ -79,6 +103,7 @@ class TinkoffAPI:
         return 0
     
     async def status_text(self, figi):
+        """Получить текстовый статус (для HTTP)"""
         orders = await self.get_orders(figi)
         pos = await self.get_position(figi)
         return f'Orders: {len(orders)}, position: {pos}'
