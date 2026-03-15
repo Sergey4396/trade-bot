@@ -72,8 +72,9 @@ async def run_balance_strategy(api):
         
         # Продажа: выставляем (позиция - 1) заявок, чтобы остался 1 лот
         sell_count = max(0, position - 1)
-        # Но не более чем позволяет MAX_ORDERS
-        sell_count = min(sell_count, MAX_ORDERS - 1)
+        
+        # Покупка: 60 - позиция (чтобы всего было 59 заявок, 1 лот всегда в резерве)
+        buy_count = MAX_ORDERS - position
         
         print(f"Выставляю {sell_count} заявок на продажу...")
         for i in range(1, sell_count + 1):
@@ -88,11 +89,6 @@ async def run_balance_strategy(api):
                     print(f"    Ошибка: {result.get('message', str(result))[:50]}")
             except Exception as e:
                 print(f"    Исключение: {str(e)[:50]}")
-        
-        # Покупка: выставляем до 57 заявок (60 - проданные)
-        buy_count = MAX_ORDERS - sell_count
-        # Максимум 57 на покупку
-        buy_count = min(buy_count, 57)
         
         print(f"Выставляю {buy_count} заявок на покупку...")
         for i in range(1, buy_count + 1):
