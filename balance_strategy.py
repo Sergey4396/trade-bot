@@ -119,10 +119,3 @@ async def run_balance_strategy(api):
         last_balance_time = datetime.now()
         print(f"Таймер обновлён")
         balance_running = False
-
-
-def reset_timer():
-    """Сбросить таймер (для ручного запуска)"""
-    global last_balance_time
-    last_balance_time = None
-    print("Таймер балансной стратегии сброшен")

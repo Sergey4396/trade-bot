@@ -5,7 +5,7 @@ import ssl
 import aiohttp
 import aiohttp.web
 from datetime import datetime
-from balance_strategy import run_balance_strategy, reset_timer
+from balance_strategy import run_balance_strategy
 
 TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
 ACCOUNT_ID = None
@@ -179,12 +179,6 @@ async def handle_status(request):
         return aiohttp.web.Response(text=f'Error: {e}', status=500)
 
 
-async def handle_reset(request):
-    """Сбросить таймер балансной стратегии"""
-    reset_timer()
-    return aiohttp.web.Response(text='Timer reset', status=200)
-
-
 async def handle_health(request):
     return aiohttp.web.Response(text='OK', status=200)
 
@@ -194,7 +188,6 @@ async def start_http_server():
     app.router.add_get('/health', handle_health)
     app.router.add_get('/cancel-all', handle_cancel_all)
     app.router.add_get('/status', handle_status)
-    app.router.add_get('/reset', handle_reset)
     
     runner = await aiohttp.web.AppRunner(app).setup()
     site = aiohttp.web.TCPSite(runner, '0.0.0.0', HTTP_PORT)
