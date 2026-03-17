@@ -73,6 +73,11 @@ def main():
     print(f"Finam Trading Bot started")
     print(f"Accounts: {fp_provider.account_ids}")
     
+    # Получаем позиции
+    from FinamPy.grpc.accounts.accounts_service_pb2 import GetAccountRequest
+    account_info = fp_provider.call_function(fp_provider.accounts_stub.GetAccount, GetAccountRequest(account_id=fp_provider.account_ids[0]))
+    print(f"Account info: {account_info}")
+    
     fp_provider.on_trade.subscribe(on_trade)
     Thread(target=fp_provider.subscribe_trades_thread).start()
     
