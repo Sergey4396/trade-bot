@@ -1,6 +1,5 @@
 import aiohttp
 import os
-from urllib.parse import quote
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
 BASE_URL = 'https://api.finam.ru'
@@ -54,8 +53,10 @@ class FinamAPI:
     async def get_latest_trades(self):
         if not self.account_id:
             await self.get_account_id()
-        # Используем URL-encoded символ
-        symbol_encoded = quote(self.SYMBOL, safe='')
+        
+        # Просто заменяем @ на %40
+        symbol_encoded = self.SYMBOL.replace('@', '%40')
+        print(f"Symbol encoded: {symbol_encoded}")
         
         # Пробуем разные endpoints
         endpoints = [
@@ -64,13 +65,13 @@ class FinamAPI:
             f'{BASE_URL}/api/v1/orderbook/{symbol_encoded}',
         ]
         
+        data = {}
         for url in endpoints:
             print(f"Trying: {url}")
-            data = await self._request('OrderBook', url)
-            if data:
+            resp = await self._request('OrderBook', url)
+            if resp:
+                data = resp
                 break
-        else:
-            data = {}
         
         # Получаем лучшие цены из стакана
         bids = data.get('bids', [])
