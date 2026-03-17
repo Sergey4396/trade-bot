@@ -57,8 +57,7 @@ def on_trade(trade):
             symbol=SYMBOL,
             quantity=Decimal(value=str(int(qty))),
             side=order_side,
-            type=OrderType.ORDER_TYPE_LIMIT,
-            limit_price=Decimal(value=str(counter_price)),
+            type=OrderType.ORDER_TYPE_MARKET,
             client_order_id=str(random.randint(1000000, 9999999)),
         )
         try:
