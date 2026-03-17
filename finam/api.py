@@ -49,13 +49,34 @@ class FinamAPI:
         self.account_id = KNOWN_ACCOUNT_ID
         return self.account_id
     
-    # Получить последние сделки
+    # Получить последние сделки (через стакан - лучший bid/ask)
     async def get_latest_trades(self):
         if not self.account_id:
             await self.get_account_id()
-        url = f'{BASE_URL}/api/v1/instruments/{self.SYMBOL}/trades/latest'
-        data = await self._request('LatestTrades', url)
-        return data.get('trades', [])
+        url = f'{BASE_URL}/api/v1/instruments/{self.SYMBOL}/orderbook'
+        data = await self._request('OrderBook', url)
+        
+        # Получаем лучшие цены из стакана
+        bids = data.get('bids', [])
+        asks = data.get('asks', [])
+        
+        # Эмулируем сделки на основе стакана
+        trades = []
+        if bids:
+            trades.append({
+                'trade_id': f"bid_{bids[0].get('price', {}).get('value', 0)}",
+                'price': {'value': str(bids[0].get('price', {}).get('value', 0))},
+                'size': {'value': '1'},
+                'side': 'buy'
+            })
+        if asks:
+            trades.append({
+                'trade_id': f"ask_{asks[0].get('price', {}).get('value', 0)}",
+                'price': {'value': str(asks[0].get('price', {}).get('value', 0))},
+                'size': {'value': '1'},
+                'side': 'sell'
+            })
+        return trades
     
     # Получить позицию
     async def get_position(self):
