@@ -53,7 +53,9 @@ class FinamAPI:
     async def get_latest_trades(self):
         if not self.account_id:
             await self.get_account_id()
-        url = f'{BASE_URL}/api/v1/instruments/{self.SYMBOL}/orderbook'
+        # Используем URL-encoded символ
+        symbol_encoded = self.SYMBOL.replace('@', '%40')
+        url = f'{BASE_URL}/api/v1/instruments/{symbol_encoded}/orderbook'
         data = await self._request('OrderBook', url)
         
         # Получаем лучшие цены из стакана
@@ -63,19 +65,23 @@ class FinamAPI:
         # Эмулируем сделки на основе стакана
         trades = []
         if bids:
-            trades.append({
-                'trade_id': f"bid_{bids[0].get('price', {}).get('value', 0)}",
-                'price': {'value': str(bids[0].get('price', {}).get('value', 0))},
-                'size': {'value': '1'},
-                'side': 'buy'
-            })
+            for b in bids[:2]:
+                price_val = b.get('price', {}).get('value', '0')
+                trades.append({
+                    'trade_id': f"bid_{price_val}",
+                    'price': {'value': price_val},
+                    'size': {'value': str(b.get('volume', 1))},
+                    'side': 'buy'
+                })
         if asks:
-            trades.append({
-                'trade_id': f"ask_{asks[0].get('price', {}).get('value', 0)}",
-                'price': {'value': str(asks[0].get('price', {}).get('value', 0))},
-                'size': {'value': '1'},
-                'side': 'sell'
-            })
+            for a in asks[:2]:
+                price_val = a.get('price', {}).get('value', '0')
+                trades.append({
+                    'trade_id': f"ask_{price_val}",
+                    'price': {'value': price_val},
+                    'size': {'value': str(a.get('volume', 1))},
+                    'side': 'sell'
+                })
         return trades
     
     # Получить позицию
