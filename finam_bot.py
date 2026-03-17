@@ -63,7 +63,7 @@ def on_trade(trade):
         )
         try:
             fp_provider.auth()
-            result = fp_provider.orders_stub.PlaceOrder(order, metadata=(fp_provider.metadata,))
+            result, call = fp_provider.orders_stub.PlaceOrder.with_call(order, metadata=(fp_provider.metadata,))
             print(f"  -> Результат: {result}")
         except Exception as e:
             print(f"  -> Ошибка: {e}")
