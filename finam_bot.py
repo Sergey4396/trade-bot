@@ -23,6 +23,7 @@ def on_trade(trade: SubscribeLatestTradesResponse):
         return
     
     for t in trade.trades:
+        print(f"DEBUG: trade = {t}")
         trade_id = t.trade_id
         if not trade_id or trade_id in SEEN_TRADES:
             continue
@@ -32,7 +33,7 @@ def on_trade(trade: SubscribeLatestTradesResponse):
             SEEN_TRADES.clear()
         
         price = float(t.price.value)
-        qty = float(t.quantity.value)
+        qty = float(t.value.value) if hasattr(t, 'value') and t.value else 1.0
         
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {qty} @ {price}")
         
