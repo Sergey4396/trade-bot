@@ -43,18 +43,19 @@ def on_trade(trade: SubscribeLatestTradesResponse):
         
         if price and qty:
             counter_price = round(price + PRICE_DELTA, 3) if trade_side == 1 else round(price - PRICE_DELTA, 3)
-            counter_side = side.SIDE_SELL if trade_side == 1 else side.SIDE_BUY
+            counter_side = 2 if trade_side == 1 else 1  # SIDE_SELL=2, SIDE_BUY=1
             
-            print(f"  -> Выставляю {counter_side.name} {int(qty)} @ {counter_price}")
+            side_name = "SELL" if counter_side == 2 else "BUY"
+            print(f"  -> Выставляю {side_name} {int(qty)} @ {counter_price}")
+            order_side = side.SIDE_SELL if counter_side == 2 else side.SIDE_BUY
             order = Order(
                 account_id=fp_provider.account_ids[0],
                 symbol=SYMBOL,
                 quantity=Decimal(value=str(int(qty))),
-                side=counter_side,
+                side=order_side,
                 type=OrderType.ORDER_TYPE_LIMIT,
                 limit_price=Decimal(value=str(counter_price)),
             )
-            fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
 
 
 def main():
