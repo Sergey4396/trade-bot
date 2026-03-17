@@ -25,7 +25,7 @@ def on_trade(trade: SubscribeLatestTradesResponse):
     for t in trade.trades:
         print(f"DEBUG: trade = {t}")
         trade_id = t.trade_id
-        if not trade_id or trade_id in SEEN_TRADES:
+        if not trade_id or trade_id == "0" or trade_id in SEEN_TRADES:
             continue
         
         SEEN_TRADES.add(trade_id)
