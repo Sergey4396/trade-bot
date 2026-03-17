@@ -59,7 +59,8 @@ def on_trade(trade):
             type=OrderType.ORDER_TYPE_LIMIT,
             limit_price=Decimal(value=str(counter_price)),
         )
-        fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
+        result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
+        print(f"  -> Результат: {result}")
 
 
 def main():
