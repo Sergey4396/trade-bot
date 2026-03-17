@@ -33,14 +33,22 @@ def on_trade(trade: SubscribeLatestTradesResponse):
             SEEN_TRADES.clear()
         
         price = float(t.price.value)
-        qty = float(t.value.value) if hasattr(t, 'value') and t.value else 1.0
+        qty = float(t.size.value) if t.size else 1.0
         
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {qty} @ {price}")
         
         if price and qty:
             counter_price = round(price + PRICE_DELTA, 3)
             print(f"  -> Выставляю SELL {int(qty)} @ {counter_price}")
-            fp_provider.place_order(int(qty), side.SIDE_SELL, counter_price)
+            order = Order(
+                account_id=fp_provider.account_ids[0],
+                symbol=SYMBOL,
+                quantity=Decimal(value=str(int(qty))),
+                side=side.SIDE_SELL,
+                type=OrderType.ORDER_TYPE_LIMIT,
+                limit_price=Decimal(value=str(counter_price)),
+            )
+            fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
 
 
 def main():
