@@ -1,5 +1,6 @@
 import aiohttp
 import os
+from urllib.parse import quote
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
 BASE_URL = 'https://api.finam.ru'
@@ -54,7 +55,7 @@ class FinamAPI:
         if not self.account_id:
             await self.get_account_id()
         # Используем URL-encoded символ
-        symbol_encoded = self.SYMBOL.replace('@', '%40')
+        symbol_encoded = quote(self.SYMBOL, safe='')
         url = f'{BASE_URL}/api/v1/instruments/{symbol_encoded}/orderbook'
         data = await self._request('OrderBook', url)
         
