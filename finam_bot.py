@@ -18,6 +18,10 @@ fp_provider = None
 
 
 def on_trade(trade: SubscribeLatestTradesResponse):
+    print(f"DEBUG: Получено {len(trade.trades)} сделок")
+    if not trade.trades:
+        return
+    
     for t in trade.trades:
         trade_id = t.trade_id
         if not trade_id or trade_id in SEEN_TRADES:
