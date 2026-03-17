@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime
 from threading import Thread
+import time
 
 from FinamPy import FinamPy
 import FinamPy.grpc.side_pb2 as side
@@ -18,6 +19,12 @@ fp_provider = None
 
 def on_trade(trade):
     """Обработчик своих сделок"""
+    # Проверяем timestamp - игнорируем сделки старше 10 секунд
+    trade_time = trade.timestamp.seconds if trade.timestamp else 0
+    current_time = int(time.time())
+    if current_time - trade_time > 10:
+        return
+    
     print(f"DEBUG: Своя сделка: {trade}")
     
     trade_id = trade.trade_id
