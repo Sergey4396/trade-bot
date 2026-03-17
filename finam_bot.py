@@ -1,48 +1,67 @@
 #!/usr/bin/env python3
-"""Finam Trading Bot"""
+import logging
 import os
-import asyncio
-import aiohttp
-import aiohttp.web
 from datetime import datetime
+from threading import Thread
+
+from FinamPy import FinamPy
+from FinamPy.grpc.marketdata.marketdata_service_pb2 import SubscribeLatestTradesResponse
+import FinamPy.grpc.side_pb2 as side
+from FinamPy.grpc.orders.orders_service_pb2 import Order, OrderType
+from google.type.decimal_pb2 import Decimal
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
-if not TOKEN:
-    TOKEN = 'eyJraWQiOiJlYzk3YjU2YS01YWZkLTQ5ZGYtYWExOS0zZDQ0YTAxN2M5OGUiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhcmVhIjoidHQiLCJwYXJlbnQiOiJmN2MyNTZiNC04NGFhLTRmZjMtYmZiOC1lMGY3YTFlNjBmNzYiLCJhcGlUb2tlblByb3BlcnRpZXMiOiJINHNJQUFBQUFBQUFfeldUTVhiVU1CQ0dOMnN2MmJlUGFzcVVvZHYzZUk5TkFxbGxXZkthV0xZanlidGVHamVwb2VBb1BDN0FDYmdCSi1BbzNJQ0NYek9pLWY2Uk5EUFNlTWJiYjdfX192bjFRT3R0Y2ZPejNLNXZWX3ZyM2VhTnIzd3RocTQ4Ry1lekh2ZXZkcVZ5ODhEcTlaeTBVakd3bnB4TmF1YlJKVzNOM0xCYU04bE83T2Zhd0hIREVEWHI2QlZyMUZWV2xfVTU2ZGoyT211YnRjdktlY2JRc0wtUGt0ZFBvck55UVRTWXJMSmZEVTdVVDZLVG5PdktabzJpUm9zNk9UZlJzMXA1Nzl3bzhUcy0yYXhjNzl6VnZXaU82X0o5M1NEN1R0V3N2WkwzOVZMdjNEZDVuZF9kWF9MLVJkYWprdnZEMFdTVi0tSlRTQTFhcWw1ck5uVFZzdWVpMFJIZThKZVJEVFA1aWczbnFrOXM5S1BuYmk1QnQ3d1JuRlA3emE1WWdvU0VNWHVHOGVYQVJ2UW0zRjJ0Zmx5dGQ2dWI3LVcyb0VLWkdRZ200VGtCUzh3RjhKeVFEdkNWcWF5LWZINmhUZUpYS3ZDOUUtQ2dqeTNnVEFJaTljblFkZjJ4N2V1VTFrd3o4VkRSdGJWdWNmNUFwVzE3UmJ0RXQ5UlR2TkRHRHVnX0ZSWlhyUzJpR3VPcE9GcWtSRnVvYU0wRVRQRG85QVZJZDNYcFdXZ0dvQkhoY0ZtSjR2RVU1MDlVb0QyQVN3aHRna3RBZGVoTEFsdUJlSTZwR0lJaUhtR21ZOElEUFNPZVlHYkw3Smk0Ykh3S0ItWTk4d0h1ZUJJUE5CVmU0OFA0V05IR1RfZ0ZxUWhxQUV4SXdGRm9rQUY0Q19ONEJGb0VoWWhDd2htSU5hcU8zWW5LaUpwZ0RrZ1JMMGd4S1J5ZlUtMHpRc28wTmlURGt4YlJNbEhYb2xNWmFZWklKb2hrZnJEWDFJcGtoa2dHaEdRcWJsZl81LUwyOWVIZDNmc1A5X2UtZTN6VV93RGd0aVNvWkFRQUFBIiwic2NvbnRleHQiOiJDaEFJQnhJTWRISmhaR1ZmWVhCcFgzSjFDaWdJQXhJa01UQTJNR1V6TVdFdE5XRTROQzAwWkdNeExXSXdZMkV0WkRGbE5tSTRZelF5TjJVMkNnUUlCUklBQ2drSUFCSUZhSFJ0YkRVS0tBZ0NFaVF5TldVd01HVTJNUzB4WlRJMUxURXhaakV0WWpVNE9DMWpabVJrWlRRNE5EVXhaVGNLQlFnSUVnRXpDZ1FJQ1JJQUNna0lDaElGTWk0MUxqQUtLQWdFRWlSbFl6azNZalUyWVMwMVlXWmtMVFE1WkdZdFlXRXhPUzB6WkRRMFlUQXhOMk01T0dVeVVBb1ZWRkpCUkVWQlVFbGZTMUpCVkU5VFgxUlBTMFZPRUFFWUFTQUJLZ2RGUkU5WVgwUkNPZ0lJQTBvVENnTUlod2NTQlFpSG9aNEJHZ1VJaDViREFWQ3NBbGdCWUFGb0FYSUdWSGhCZFhSbyIsInppcHBlZCI6dHJ1ZSwiY3JlYXRlZCI6IjE3NzMzNTYxODkiLCJyZW5ld0V4cCI6IjE4MDM4NDg0NTkiLCJzZXNzIjoiSDRzSUFBQUFBQUFBLzFPcTVGSXhUTFJJU2pOUE5kZE5TalkxMGpVeFRFclR0VEJMVHROTk0wMU5OVGRQVFRKTHNqUVg0cm13OE1MV2l3MFhObC9ZZW1HbkZOK0ZCUmY3TDJ5OHNPUENYaEJXNGkzV0s5WXJjc2hOek16Ukt5cE5VbkZ5TlRGemRMVjAwVFYzTkhmVE5URnhNdEcxTUhCMTFiVjBNakkxc1RCeE16STBNdHZGeU12Rkd1OFhFT1F2eE9MdjVCOEJBQitaWlg2TEFBQUEiLCJpc3MiOiJ0eHNlcnZlciIsImtleUlkIjoiZWM5N2I1NmEtNWFmZC00OWRmLWFhMTktM2Q0NGEwMTdjOThlIiwidHlwZSI6IkFwaVRva2VuIiwic2VjcmV0cyI6ImpJZnZscndXT3EzbDRGQWpMTThOM3c9PSIsInNjb3BlIjoiIiwidHN0ZXAiOiJmYWxzZSIsInNwaW5SZXEiOmZhbHNlLCJleHAiOjE4MDM4NDgzOTksInNwaW5FeHAiOiIxODAzODQ4NDU5IiwianRpIjoiMTA2MGUzMWEtNWE4NC00ZGMxLWIwY2EtZDFlNmI4YzQyN2U2In0.JyckL_Wafzbpan54YO58lKR9hIk4fiahLz1Tg3crmI6iEzBdnB7iKBHcLoziYmkEPMM3t4bzmXe2RCJ2QMMPpIBH_3GoZjfnupwrzk23JlXzsM0KFXlMl-w0H1v1JyfK1vxHNqGRpU6wnp8vMNX3BHcNA80lV8BVIICk0jp0RRs'
-
-HTTP_PORT = int(os.environ.get('HTTP_PORT', '8081'))
-HTTP_PASSWORD = os.environ.get('HTTP_PASSWORD', 'secret123')
-
-from finam.api import FinamAPI, init as init_api
-
-init_api(TOKEN)
-api = FinamAPI()
+SYMBOL = 'NRH6@MOEX'
+PRICE_DELTA = 0.020
+SEEN_TRADES = set()
+fp_provider = None
 
 
-async def handle_cancel_all(request):
-    password = request.query.get('password', '')
-    if password != HTTP_PASSWORD:
-        return aiohttp.web.Response(text='Unauthorized', status=401)
-    return aiohttp.web.Response(text='Not implemented', status=200)
+def on_trade(trade: SubscribeLatestTradesResponse):
+    for t in trade.trades:
+        trade_id = t.trade_id
+        if not trade_id or trade_id in SEEN_TRADES:
+            continue
+        
+        SEEN_TRADES.add(trade_id)
+        if len(SEEN_TRADES) > 100:
+            SEEN_TRADES.clear()
+        
+        price = float(t.price.value)
+        qty = float(t.quantity.value)
+        
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {qty} @ {price}")
+        
+        if price and qty:
+            counter_price = round(price + PRICE_DELTA, 3)
+            print(f"  -> Выставляю SELL {int(qty)} @ {counter_price}")
+            fp_provider.place_order(int(qty), side.SIDE_SELL, counter_price)
 
 
-async def handle_status(request):
-    return aiohttp.web.Response(text=await api.status_text(), status=200)
-
-
-async def handle_health(request):
-    return aiohttp.web.Response(text='OK', status=200)
-
-
-async def main():
-    print("Finam Trading Bot")
+def main():
+    global fp_provider
+    fp_provider = FinamPy(TOKEN)
     
-    await api.get_account_id()
-    print(f"Account ID: {api.account_id}")
+    print(f"Finam Trading Bot started")
+    print(f"Accounts: {fp_provider.account_ids}")
     
-    from finam.socket_trades import run_socket
-    await run_socket(api)
+    _, ticker = fp_provider.dataname_to_finam_board_ticker(SYMBOL)
+    mic = fp_provider.get_mic('TQBR', ticker)
+    symbol = f'{ticker}@{mic}'
+    
+    fp_provider.on_latest_trades.subscribe(on_trade)
+    Thread(target=fp_provider.subscribe_latest_trades_thread, args=(symbol,)).start()
+    
+    print(f"Подписка на {symbol}. Нажми Ctrl+C для выхода.")
+    
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        pass
+    finally:
+        fp_provider.close_channel()
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
