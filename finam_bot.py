@@ -5,7 +5,6 @@ from datetime import datetime
 from threading import Thread
 
 from FinamPy import FinamPy
-from FinamPy.grpc.marketdata.marketdata_service_pb2 import SubscribeLatestTradesResponse
 import FinamPy.grpc.side_pb2 as side
 from FinamPy.grpc.orders.orders_service_pb2 import Order, OrderType
 from google.type.decimal_pb2 import Decimal
@@ -17,45 +16,43 @@ SEEN_TRADES = set()
 fp_provider = None
 
 
-def on_trade(trade: SubscribeLatestTradesResponse):
-    print(f"DEBUG: Получено {len(trade.trades)} сделок")
-    if not trade.trades:
+def on_trade(trade):
+    """Обработчик своих сделок"""
+    print(f"DEBUG: Своя сделка: {trade}")
+    
+    trade_id = trade.trade_id
+    if not trade_id or trade_id == "0" or trade_id in SEEN_TRADES:
         return
     
-    for t in trade.trades:
-        print(f"DEBUG: trade = {t}")
-        trade_id = t.trade_id
-        if not trade_id or trade_id == "0" or trade_id in SEEN_TRADES:
-            continue
+    SEEN_TRADES.add(trade_id)
+    if len(SEEN_TRADES) > 100:
+        SEEN_TRADES.clear()
+    
+    price = float(trade.price.value)
+    qty = float(trade.quantity.value) if trade.quantity else 1.0
+    
+    trade_side = trade.side  # SIDE_BUY or SIDE_SELL (int)
+    
+    side_name = "BUY" if trade_side == 1 else "SELL" if trade_side == 2 else str(trade_side)
+    
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Своя сделка: {side_name} {qty} @ {price}")
+    
+    if price and qty:
+        counter_price = round(price + PRICE_DELTA, 3) if trade_side == 1 else round(price - PRICE_DELTA, 3)
+        counter_side = 2 if trade_side == 1 else 1  # SIDE_SELL=2, SIDE_BUY=1
         
-        SEEN_TRADES.add(trade_id)
-        if len(SEEN_TRADES) > 100:
-            SEEN_TRADES.clear()
-        
-        price = float(t.price.value)
-        qty = float(t.size.value) if t.size else 1.0
-        
-        trade_side = t.side  # SIDE_BUY or SIDE_SELL (int)
-        
-        side_name = "BUY" if trade_side == 1 else "SELL" if trade_side == 2 else str(trade_side)
-        
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {side_name} {qty} @ {price}")
-        
-        if price and qty:
-            counter_price = round(price + PRICE_DELTA, 3) if trade_side == 1 else round(price - PRICE_DELTA, 3)
-            counter_side = 2 if trade_side == 1 else 1  # SIDE_SELL=2, SIDE_BUY=1
-            
-            side_name = "SELL" if counter_side == 2 else "BUY"
-            print(f"  -> Выставляю {side_name} {int(qty)} @ {counter_price}")
-            order_side = side.SIDE_SELL if counter_side == 2 else side.SIDE_BUY
-            order = Order(
-                account_id=fp_provider.account_ids[0],
-                symbol=SYMBOL,
-                quantity=Decimal(value=str(int(qty))),
-                side=order_side,
-                type=OrderType.ORDER_TYPE_LIMIT,
-                limit_price=Decimal(value=str(counter_price)),
-            )
+        side_name = "SELL" if counter_side == 2 else "BUY"
+        print(f"  -> Выставляю {side_name} {int(qty)} @ {counter_price}")
+        order_side = side.SIDE_SELL if counter_side == 2 else side.SIDE_BUY
+        order = Order(
+            account_id=fp_provider.account_ids[0],
+            symbol=SYMBOL,
+            quantity=Decimal(value=str(int(qty))),
+            side=order_side,
+            type=OrderType.ORDER_TYPE_LIMIT,
+            limit_price=Decimal(value=str(counter_price)),
+        )
+        fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
 
 
 def main():
@@ -65,12 +62,10 @@ def main():
     print(f"Finam Trading Bot started")
     print(f"Accounts: {fp_provider.account_ids}")
     
-    symbol = SYMBOL
+    fp_provider.on_trade.subscribe(on_trade)
+    Thread(target=fp_provider.subscribe_trades_thread).start()
     
-    fp_provider.on_latest_trades.subscribe(on_trade)
-    Thread(target=fp_provider.subscribe_latest_trades_thread, args=(symbol,)).start()
-    
-    print(f"Подписка на {symbol}. Нажми Ctrl+C для выхода.")
+    print(f"Подписка на свои сделки. Нажми Ctrl+C для выхода.")
     
     try:
         while True:
