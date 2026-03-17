@@ -39,15 +39,16 @@ def on_trade(trade: SubscribeLatestTradesResponse):
         
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {trade_side.name} {qty} @ {price}")
         
-        # Реагируем только на покупки - продаём 1 лот
-        if trade_side == side.SIDE_BUY and price and qty:
-            counter_price = round(price + PRICE_DELTA, 3)
-            print(f"  -> Выставляю SELL 1 @ {counter_price}")
+        if price and qty:
+            counter_price = round(price + PRICE_DELTA, 3) if trade_side == side.SIDE_BUY else round(price - PRICE_DELTA, 3)
+            counter_side = side.SIDE_SELL if trade_side == side.SIDE_BUY else side.SIDE_BUY
+            
+            print(f"  -> Выставляю {counter_side.name} {int(qty)} @ {counter_price}")
             order = Order(
                 account_id=fp_provider.account_ids[0],
                 symbol=SYMBOL,
-                quantity=Decimal(value="1"),
-                side=side.SIDE_SELL,
+                quantity=Decimal(value=str(int(qty))),
+                side=counter_side,
                 type=OrderType.ORDER_TYPE_LIMIT,
                 limit_price=Decimal(value=str(counter_price)),
             )
