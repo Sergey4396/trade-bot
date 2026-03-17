@@ -16,6 +16,7 @@ TOKEN = os.environ.get('FINAM_TOKEN', '')
 SYMBOL = 'NRH6@RTSX'
 PRICE_DELTA = 0.020
 INITIAL_ORDER_PRICE = 3.030
+INITIAL_ORDER_SIDE = 'SELL'  # Пробуем сначала продать
 SEEN_TRADES = set()
 fp_provider = None
 trade_client = None
@@ -55,11 +56,11 @@ async def place_order_async(qty, side_name, price):
 
 
 def place_initial_order():
-    """Выставляем начальную заявку на покупку"""
+    """Выставляем начальную заявку"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(place_order_async(1, 'BUY', INITIAL_ORDER_PRICE))
+        loop.run_until_complete(place_order_async(1, INITIAL_ORDER_SIDE, INITIAL_ORDER_PRICE))
     finally:
         loop.close()
 
