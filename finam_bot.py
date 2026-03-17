@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from threading import Thread
 import time
+import random
 
 from FinamPy import FinamPy
 import FinamPy.grpc.side_pb2 as side
@@ -58,6 +59,7 @@ def on_trade(trade):
             side=order_side,
             type=OrderType.ORDER_TYPE_LIMIT,
             limit_price=Decimal(value=str(counter_price)),
+            client_order_id=str(random.randint(1000000, 9999999)),
         )
         result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
         print(f"  -> Результат: {result}")
