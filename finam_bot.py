@@ -45,9 +45,7 @@ def main():
     print(f"Finam Trading Bot started")
     print(f"Accounts: {fp_provider.account_ids}")
     
-    _, ticker = fp_provider.dataname_to_finam_board_ticker(SYMBOL)
-    mic = fp_provider.get_mic('TQBR', ticker)
-    symbol = f'{ticker}@{mic}'
+    symbol = SYMBOL
     
     fp_provider.on_latest_trades.subscribe(on_trade)
     Thread(target=fp_provider.subscribe_latest_trades_thread, args=(symbol,)).start()
