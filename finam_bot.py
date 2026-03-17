@@ -63,7 +63,17 @@ def on_trade(trade):
         )
         print(f"  -> Отправляю ордер: {order}")
         result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
-        print(f"  -> Результат: {result}")
+        
+        # Проверяем результат - иногда ошибка 666 это предупреждение
+        if result is None:
+            print(f"  -> Ордер может быть отклонён (код 666)")
+        else:
+            print(f"  -> Результат: {result}")
+
+
+def on_order(order):
+    """Обработчик своих заявок"""
+    print(f"DEBUG: Новая заявка: {order}")
 
 
 def main():
@@ -73,12 +83,10 @@ def main():
     print(f"Finam Trading Bot started")
     print(f"Accounts: {fp_provider.account_ids}")
     
-    # Получаем позиции
-    from FinamPy.grpc.accounts.accounts_service_pb2 import GetAccountRequest
-    account_info = fp_provider.call_function(fp_provider.accounts_stub.GetAccount, GetAccountRequest(account_id=fp_provider.account_ids[0]))
-    print(f"Account info: {account_info}")
-    
     fp_provider.on_trade.subscribe(on_trade)
+    fp_provider.on_order.subscribe(on_order)
+    Thread(target=fp_provider.subscribe_trades_thread).start()
+    Thread(target=fp_provider.subscribe_orders_thread).start()
     Thread(target=fp_provider.subscribe_trades_thread).start()
     
     print(f"Подписка на свои сделки. Нажми Ctrl+C для выхода.")
