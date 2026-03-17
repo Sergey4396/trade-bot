@@ -11,7 +11,7 @@ from FinamPy.grpc.orders.orders_service_pb2 import Order, OrderType
 from google.type.decimal_pb2 import Decimal
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
-SYMBOL = 'NRH6@MOEX'
+SYMBOL = 'NRH6@RTSX'
 PRICE_DELTA = 0.020
 SEEN_TRADES = set()
 fp_provider = None
