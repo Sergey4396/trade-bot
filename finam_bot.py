@@ -5,10 +5,13 @@ from datetime import datetime
 from threading import Thread
 import time
 import random
+import asyncio
 
 from FinamPy import FinamPy
 import FinamPy.grpc.side_pb2 as side
-from FinamPy.grpc.orders.orders_service_pb2 import Order, OrderType
+from finam_trade_api import Client, TokenManager
+from finam_trade_api.base_client.models import Side as FinamTradeSide, OrderType, TimeInForce
+from finam_trade_api.base_client import FinamDecimal
 from google.type.decimal_pb2 import Decimal
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
@@ -17,22 +20,48 @@ PRICE_DELTA = 0.020
 INITIAL_ORDER_PRICE = 3.030
 SEEN_TRADES = set()
 fp_provider = None
+trade_client = None
+ACCOUNT_ID = '2038952'
+
+
+async def get_trade_client():
+    global trade_client
+    if not trade_client:
+        trade_client = Client(TokenManager(TOKEN))
+        await trade_client.access_tokens.set_jwt_token()
+    return trade_client
+
+
+async def place_order_async(qty, side_name, price):
+    """Выставляем ордер через finam-trade-api"""
+    c = await get_trade_client()
+    try:
+        from finam_trade_api.order import Order
+        order = Order(
+            account_id=ACCOUNT_ID,
+            symbol=SYMBOL,
+            quantity=FinamDecimal(value=str(qty)),
+            side=FinamTradeSide.BUY if side_name == 'BUY' else FinamTradeSide.SELL,
+            type=OrderType.LIMIT,
+            time_in_force=TimeInForce.DAY,
+            limit_price=FinamDecimal(value=str(price)),
+        )
+        result = await c.orders.place_order(order)
+        print(f"  -> Результат (async): {result}")
+        return result
+    except Exception as e:
+        print(f"  -> Ошибка (async): {e}")
+        return None
 
 
 def place_initial_order():
     """Выставляем начальную заявку на покупку"""
-    order = Order(
-        account_id=fp_provider.account_ids[0],
-        symbol=SYMBOL,
-        quantity=Decimal(value="1"),
-        side=side.SIDE_BUY,
-        type=OrderType.ORDER_TYPE_LIMIT,
-        limit_price=Decimal(value=str(INITIAL_ORDER_PRICE)),
-        client_order_id=str(random.randint(1000000, 9999999)),
-    )
-    print(f"  -> Выставляю начальную заявку BUY 1 @ {INITIAL_ORDER_PRICE}")
-    result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
-    print(f"  -> Результат: {result}")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(place_order_async(1, 'BUY', INITIAL_ORDER_PRICE))
+    finally:
+        loop.close()
 
 
 def on_trade(trade):
@@ -41,8 +70,6 @@ def on_trade(trade):
     current_time = int(time.time())
     if current_time - trade_time > 10:
         return
-    
-    print(f"DEBUG: Своя сделка: {trade}")
     
     trade_id = trade.trade_id
     if not trade_id or trade_id == "0" or trade_id in SEEN_TRADES:
@@ -63,32 +90,22 @@ def on_trade(trade):
     
     if price and qty:
         counter_price = round(price + PRICE_DELTA, 3) if trade_side == 1 else round(price - PRICE_DELTA, 3)
-        counter_side = 2 if trade_side == 1 else 1
+        counter_side_name = "SELL" if trade_side == 1 else "BUY"
         
-        side_name = "SELL" if counter_side == 2 else "BUY"
-        print(f"  -> Выставляю {side_name} {int(qty)} @ {counter_price}")
-        order_side = side.SIDE_SELL if counter_side == 2 else side.SIDE_BUY
-        order = Order(
-            account_id=fp_provider.account_ids[0],
-            symbol=SYMBOL,
-            quantity=Decimal(value=str(int(qty))),
-            side=order_side,
-            type=OrderType.ORDER_TYPE_LIMIT,
-            limit_price=Decimal(value=str(counter_price)),
-            client_order_id=str(random.randint(1000000, 9999999)),
-        )
-        print(f"  -> Отправляю ордер: {order}")
-        result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
+        print(f"  -> Выставляю {counter_side_name} {int(qty)} @ {counter_price}")
         
-        if result is None:
-            print(f"  -> Ордер может быть отклонён (код 666)")
-        else:
-            print(f"  -> Результат: {result}")
+        # Используем async версию
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(place_order_async(int(qty), counter_side_name, counter_price))
+        finally:
+            loop.close()
 
 
 def on_order(order):
     """Обработчик своих заявок"""
-    print(f"DEBUG: Новая заявка: {order}")
+    print(f"DEBUG: Заявка: order_id={order.order_id}, status={order.status}")
 
 
 def main():
