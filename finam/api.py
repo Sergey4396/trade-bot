@@ -56,9 +56,21 @@ class FinamAPI:
             await self.get_account_id()
         # Используем URL-encoded символ
         symbol_encoded = quote(self.SYMBOL, safe='')
-        # Пробуем разные варианты URL
-        url = f'{BASE_URL}/api/v1/marketdata/{symbol_encoded}/orderbook'
-        data = await self._request('OrderBook', url)
+        
+        # Пробуем разные endpoints
+        endpoints = [
+            f'{BASE_URL}/api/v1/marketdata/{symbol_encoded}/orderbook',
+            f'{BASE_URL}/api/v1/instruments/{symbol_encoded}/orderbook',
+            f'{BASE_URL}/api/v1/orderbook/{symbol_encoded}',
+        ]
+        
+        for url in endpoints:
+            print(f"Trying: {url}")
+            data = await self._request('OrderBook', url)
+            if data:
+                break
+        else:
+            data = {}
         
         # Получаем лучшие цены из стакана
         bids = data.get('bids', [])
