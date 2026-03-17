@@ -35,13 +35,15 @@ def on_trade(trade: SubscribeLatestTradesResponse):
         price = float(t.price.value)
         qty = float(t.size.value) if t.size else 1.0
         
-        trade_side = t.side  # SIDE_BUY or SIDE_SELL
+        trade_side = t.side  # SIDE_BUY or SIDE_SELL (int)
         
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {trade_side.name} {qty} @ {price}")
+        side_name = "BUY" if trade_side == 1 else "SELL" if trade_side == 2 else str(trade_side)
+        
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Сделка: {side_name} {qty} @ {price}")
         
         if price and qty:
-            counter_price = round(price + PRICE_DELTA, 3) if trade_side == side.SIDE_BUY else round(price - PRICE_DELTA, 3)
-            counter_side = side.SIDE_SELL if trade_side == side.SIDE_BUY else side.SIDE_BUY
+            counter_price = round(price + PRICE_DELTA, 3) if trade_side == 1 else round(price - PRICE_DELTA, 3)
+            counter_side = side.SIDE_SELL if trade_side == 1 else side.SIDE_BUY
             
             print(f"  -> Выставляю {counter_side.name} {int(qty)} @ {counter_price}")
             order = Order(
