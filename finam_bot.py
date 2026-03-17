@@ -29,7 +29,7 @@ def on_trade(trade):
         SEEN_TRADES.clear()
     
     price = float(trade.price.value)
-    qty = float(trade.quantity.value) if trade.quantity else 1.0
+    qty = float(trade.size.value) if trade.size else 1.0
     
     trade_side = trade.side  # SIDE_BUY or SIDE_SELL (int)
     
