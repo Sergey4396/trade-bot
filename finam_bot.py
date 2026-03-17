@@ -61,7 +61,8 @@ def on_trade(trade):
             limit_price=Decimal(value=str(counter_price)),
             client_order_id=str(random.randint(1000000, 9999999)),
         )
-        result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
+        fp_provider.auth()
+        result = fp_provider.orders_stub.PlaceOrder(order, metadata=(fp_provider.metadata,))
         print(f"  -> Результат: {result}")
 
 
