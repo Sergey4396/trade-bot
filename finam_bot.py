@@ -10,7 +10,6 @@ import asyncio
 from FinamPy import FinamPy
 import FinamPy.grpc.side_pb2 as side
 from finam_trade_api import Client, TokenManager
-from finam_trade_api.base_client.models import Side as FinamTradeSide
 from google.type.decimal_pb2 import Decimal
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
@@ -35,13 +34,19 @@ async def place_order_async(qty, side_name, price):
     """Выставляем ордер через finam-trade-api"""
     c = await get_trade_client()
     try:
-        result = await c.orders.place_order(
+        from finam_trade_api.order import Order, OrderType, TimeInForce
+        from finam_trade_api.base_client.models import FinamDecimal, Side
+        
+        order = Order(
             account_id=ACCOUNT_ID,
             symbol=SYMBOL,
-            quantity=qty,
-            side=FinamTradeSide.BUY if side_name == 'BUY' else FinamTradeSide.SELL,
-            price=price,
+            quantity=FinamDecimal(value=str(qty)),
+            side=Side.BUY if side_name == 'BUY' else Side.SELL,
+            type=OrderType.LIMIT,
+            time_in_force=TimeInForce.DAY,
+            limit_price=FinamDecimal(value=str(price)),
         )
+        result = await c.orders.place_order(order)
         print(f"  -> Результат (async): {result}")
         return result
     except Exception as e:
