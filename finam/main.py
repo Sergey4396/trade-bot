@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 import os
+import sys
 import asyncio
 import aiohttp
 import aiohttp.web
 from datetime import datetime
+
+# Добавляем путь для импорта
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Токен Finam (можно передать через переменную окружения или указать здесь)
 TOKEN = os.environ.get('FINAM_TOKEN', '')
