@@ -57,15 +57,13 @@ def on_trade(trade):
             symbol=SYMBOL,
             quantity=Decimal(value=str(int(qty))),
             side=order_side,
-            type=OrderType.ORDER_TYPE_MARKET,
+            type=OrderType.ORDER_TYPE_LIMIT,
+            limit_price=Decimal(value=str(counter_price)),
             client_order_id=str(random.randint(1000000, 9999999)),
         )
-        try:
-            fp_provider.auth()
-            result, call = fp_provider.orders_stub.PlaceOrder.with_call(order, metadata=(fp_provider.metadata,))
-            print(f"  -> Результат: {result}")
-        except Exception as e:
-            print(f"  -> Ошибка: {e}")
+        print(f"  -> Отправляю ордер: {order}")
+        result = fp_provider.call_function(fp_provider.orders_stub.PlaceOrder, order)
+        print(f"  -> Результат: {result}")
 
 
 def main():
