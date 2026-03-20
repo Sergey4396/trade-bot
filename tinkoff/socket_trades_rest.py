@@ -28,7 +28,7 @@ def get_figi_by_ticker(ticker: str) -> str:
 
 async def get_accounts(session):
     """Получить список счетов"""
-    url = "https://api-invest.tinkoff.ru/openapi/portfolio"
+    url = "https://invest-public-api.tbank.ru/accounts"
     headers = {"Authorization": f"Bearer {TOKEN}"}
     async with session.get(url, headers=headers) as resp:
         text = await resp.text()
