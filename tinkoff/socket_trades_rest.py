@@ -28,18 +28,15 @@ def get_figi_by_ticker(ticker: str) -> str:
 
 async def get_accounts(session):
     """Получить список счетов"""
-    url = "https://api-invest.tinkoff.ru/openapi/accounts"
+    url = "https://invest-public-api.tinkoff.ru/openapi/accounts"
     headers = {"Authorization": f"Bearer {TOKEN}"}
-    async with session.get(url, headers=headers, allow_redirects=False) as resp:
-        print(f"Status: {resp.status}, URL: {resp.headers.get('Location', 'none')}")
-        text = await resp.text()
-        print(f"Response: {text[:500]}")
+    async with session.get(url, headers=headers) as resp:
         return await resp.json()
 
 
 async def get_orders(session, account_id):
     """Получить активные заявки"""
-    url = f"https://api-invest.tinkoff.ru/openapi/orders?brokerAccountId={account_id}"
+    url = f"https://invest-public-api.tinkoff.ru/openapi/orders?brokerAccountId={account_id}"
     headers = {"Authorization": f"Bearer {TOKEN}"}
     async with session.get(url, headers=headers) as resp:
         return await resp.json()
@@ -47,7 +44,7 @@ async def get_orders(session, account_id):
 
 async def post_order(session, account_id, figi, quantity, direction, price):
     """Выставить заявку"""
-    url = "https://api-invest.tinkoff.ru/openapi/orders/limit-order"
+    url = "https://invest-public-api.tinkoff.ru/openapi/orders/limit-order"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
