@@ -28,10 +28,16 @@ def get_figi_by_ticker(ticker: str) -> str:
 
 async def get_accounts(session):
     """Получить список счетов"""
-    url = "https://invest-public-api.tinkoff.ru/openapi/accounts"
+    url = "https://api-invest.tinkoff.ru/openapi/portfolio"
     headers = {"Authorization": f"Bearer {TOKEN}"}
     async with session.get(url, headers=headers) as resp:
-        return await resp.json()
+        text = await resp.text()
+        print(f"Accounts response status: {resp.status}")
+        print(f"Accounts response: {text[:1000]}")
+        try:
+            return await resp.json()
+        except:
+            return {"error": text}
 
 
 async def get_orders(session, account_id):
