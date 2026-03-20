@@ -3,7 +3,7 @@
 import os
 import asyncio
 from decimal import Decimal
-from tinkoff.invest import AsyncClient, OrderDirection
+from tinkoff.invest import AsyncClient, OrderDirection, OrderType
 from tinkoff.invest.constants import INVEST_GRPC_API
 from tinkoff.invest.utils import quotation_to_decimal, decimal_to_quotation, money_to_decimal
 
@@ -94,7 +94,7 @@ async def run_socket(api):
                                 quantity=quantity,
                                 price=decimal_to_quotation(counter_price),
                                 account_id=account.id,
-                                order_type=OrderDirection.ORDER_DIRECTION_LIMIT,
+                                order_type=OrderType.ORDER_TYPE_LIMIT,
                                 direction=counter_direction,
                             )
                             print(f"Ордер выставлен: {result.order_id}")
