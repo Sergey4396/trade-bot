@@ -7,7 +7,7 @@ from tinkoff.invest import AsyncClient, OrderDirection, OrderType
 from tinkoff.invest.constants import INVEST_GRPC_API
 from tinkoff.invest.utils import quotation_to_decimal, decimal_to_quotation, money_to_decimal
 
-TOKEN = os.environ.get('TINKOFF_TOKEN', 'YOUR_TOKEN_HERE')
+TOKEN = 't.KNbRWnr_MoKUOuBfzvjyUTUYftgAdZhpZ4zBqfwkgYtd4wnOaYuHCJHAeRXounciZ3N4NSQGPtH-8v5Mw0f_fQ'
 
 # Настройки
 FIGI = 'FUTNGM032600'  # NRH6
