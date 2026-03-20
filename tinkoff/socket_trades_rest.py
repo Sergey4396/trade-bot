@@ -30,7 +30,10 @@ async def get_accounts(session):
     """Получить список счетов"""
     url = "https://api-invest.tinkoff.ru/openapi/accounts"
     headers = {"Authorization": f"Bearer {TOKEN}"}
-    async with session.get(url, headers=headers) as resp:
+    async with session.get(url, headers=headers, allow_redirects=False) as resp:
+        print(f"Status: {resp.status}, URL: {resp.headers.get('Location', 'none')}")
+        text = await resp.text()
+        print(f"Response: {text[:500]}")
         return await resp.json()
 
 
