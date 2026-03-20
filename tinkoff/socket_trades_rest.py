@@ -4,11 +4,17 @@
 import os
 import asyncio
 import aiohttp
+import ssl
 from decimal import Decimal
 import time
 import json
 
 TOKEN = 't.KNbRWnr_MoKUOuBfzvjyUTUYftgAdZhpZ4zBqfwkgYtd4wnOaYuHCJHAeRXounciZ3N4NSQGPtH-8v5Mw0f_fQ'
+
+# Отключаем SSL проверку (для обхода прокси)
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 # Настройки
 FIGI = 'FUTNGM032600'  # NRH6
@@ -91,7 +97,8 @@ async def run_socket():
     
     seen_orders = set()  # Отслеживаем обработанные заявки
     
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=connector) as session:
         # Получаем счёт
         accounts = await get_accounts(session)
         if 'accounts' not in accounts:
