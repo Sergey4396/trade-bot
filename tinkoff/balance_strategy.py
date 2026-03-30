@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime
 
 # Настройки инструмента
-FIGI = 'FUTNGM052600'  # NRK6
+FIGI = 'FUTNGM042600'  # NRJ6
 STEP = 0.010  # шаг цены (1 единица)
 OFFSET = 0.002  # отступ от рынка
 TOTAL_ORDERS = 60  # количество заявок на каждую сторону
