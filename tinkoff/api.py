@@ -79,6 +79,14 @@ class TinkoffAPI:
             return (self._parse_price(bids[0].get('price', {})) + self._parse_price(asks[0].get('price', {}))) / 2
         return None
     
+    # Получить лучшие цены bid и ask из стакана
+    async def get_orderbook_prices(self, figi):
+        data = await self._request('GetOrderBook', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetOrderBook', {'figi': figi, 'depth': 1})
+        bids, asks = data.get('bids', []), data.get('asks', [])
+        best_bid = self._parse_price(bids[0].get('price', {})) if bids else None
+        best_ask = self._parse_price(asks[0].get('price', {})) if asks else None
+        return best_bid, best_ask
+    
     # Конвертировать цену из units/nano в float
     def _parse_price(self, price_dict):
         units, nano = price_dict.get('units', 0), price_dict.get('nano', 0)
