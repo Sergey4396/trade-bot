@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from tinkoff.api import TinkoffAPI, init as init_api
 from tinkoff.balance_strategy import run_balance_strategy, FIGI
 
 TOKEN = os.environ.get('TINKOFF_TOKEN', 't.KNbRWnr_MoKUOuBfzvjyUTUYftgAdZhpZ4zBqfwkgYtd4wnOaYuHCJHAeRXounciZ3N4NSQGPtH-8v5Mw0f_fQ')
+
+MOSCOW_TZ = timezone(timedelta(hours=3))
 
 init_api(TOKEN)
 api = TinkoffAPI()
@@ -23,7 +25,9 @@ async def main():
             await run_balance_strategy(api)
             for _ in range(60):
                 await asyncio.sleep(10)
-                print(f"=== {datetime.now().strftime('%H:%M:%S')} ===")
+                now_utc = datetime.now(timezone.utc)
+                now_moscow = now_utc.astimezone(MOSCOW_TZ)
+                print(f"=== {now_moscow.strftime('%H:%M:%S')} мск ===")
         except KeyboardInterrupt:
             print("\nОстановка...")
             break
