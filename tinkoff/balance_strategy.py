@@ -1,138 +1,141 @@
 """
-Лесенка заявок
-Каждые 10 минут: удаляет все заявки и выставляет новую лесенку
+Лесенка заявок для нескольких инструментов
 """
 import asyncio
 from datetime import datetime, timezone, timedelta
+from tinkoff.api import TinkoffAPI
+from tinkoff.config import TOKENS, INSTRUMENTS
 
-# Настройки инструмента
-FIGI = 'FUTNGM042600'  # NRJ6
-STEP = 0.001  # шаг цены (1 единица)
-OFFSET = 0.002  # отступ от рынка
-TOTAL_ORDERS = 60  # количество заявок на каждую сторону
-LOTS_PER_ORDER = 3  # количество лотов в каждой заявке
-INTERVAL = 600  # интервал в секундах (10 минут)
-
-# Глобальные переменные
-last_balance_time = None
-balance_running = False
-
-# Москва UTC+3
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
+apis = {}
 
-def is_trading_time():
-    """Проверяет, можно ли торговать (9:00-23:30 мск, кроме 9:50-10:00)"""
+
+def get_api(account_id):
+    if account_id not in apis:
+        apis[account_id] = TinkoffAPI(TOKENS[account_id])
+    return apis[account_id]
+
+
+def is_trading_time(trade_hours):
+    """Проверяет, можно ли торговать"""
     now_utc = datetime.now(timezone.utc)
     now_moscow = now_utc.astimezone(MOSCOW_TZ)
     hour = now_moscow.hour
     minute = now_moscow.minute
     
-    # Проверяем диапазон 9:00 - 23:30
-    if hour < 9 or (hour == 23 and minute > 30) or hour >= 24:
-        return False
-    if hour < 9:
+    start = trade_hours.get('start', 9)
+    end = trade_hours.get('end', 23)
+    end_minute = trade_hours.get('end_minute', 30)
+    skip_hours = trade_hours.get('skip_hours', [])
+    
+    if hour < start or hour > end or (hour == end and minute > end_minute):
         return False
     
-    # Пропускаем 9:50 - 10:00
-    if hour == 9 and minute >= 50:
-        return False
-    if hour == 10 and minute < 1:
-        return False
+    for skip_start_h, skip_start_m, skip_end_h, skip_end_m in skip_hours:
+        if skip_start_h <= hour < skip_end_h:
+            if hour == skip_start_h and minute >= skip_start_m:
+                return False
+            if hour == skip_end_h and minute < skip_end_m:
+                return False
+            if skip_start_h < hour < skip_end_h:
+                return False
     
     return True
 
 
-async def run_balance_strategy(api):
-    """
-    Запускает стратегию лесенки
-    1. Проверяем время
-    2. Получаем лучшие bid/ask из стакана
-    3. Удаляем все заявки
-    4. Выставляем 60 заявок на покупку ниже best_bid - OFFSET
-    5. Выставляем 60 заявок на продажу выше best_ask + OFFSET
-    """
-    global last_balance_time, balance_running
+async def run_instrument(instrument):
+    """Запускает стратегию для одного инструмента"""
+    account_id = instrument['account']
+    figi = instrument['figi']
+    ticker = instrument['ticker']
     
-    if balance_running:
-        print("Стратегия уже выполняется, пропускаю")
+    api = get_api(account_id)
+    
+    if not await api.get_account_id():
+        print(f"[{ticker}] Не удалось получить account_id")
         return
     
-    # Проверяем каждые INTERVAL секунд
-    if last_balance_time and (datetime.now() - last_balance_time).total_seconds() < INTERVAL:
+    trade_hours = instrument.get('trade_hours', {})
+    if not is_trading_time(trade_hours):
         return
     
-    # Проверяем время торговли
-    if not is_trading_time():
-        return
-    
-    balance_running = True
+    step = instrument.get('step', 0.001)
+    offset_buy = instrument.get('offset_buy', 0.002)
+    offset_sell = instrument.get('offset_sell', 0.002)
+    lots = instrument.get('lots_per_order', 1)
+    total_orders = instrument.get('total_orders', 60)
+    min_qty = instrument.get('min_qty')
+    max_qty = instrument.get('max_qty')
     
     try:
-        now_utc = datetime.now(timezone.utc)
-        now_moscow = now_utc.astimezone(MOSCOW_TZ)
-        print(f"\n=== {now_moscow.strftime('%H:%M:%S')} мск === Лесенка")
-        
-        # Получаем лучшие цены из стакана
-        best_bid, best_ask = await api.get_orderbook_prices(FIGI)
+        best_bid, best_ask = await api.get_orderbook_prices(figi)
         
         if not best_bid or not best_ask:
-            print(f"Не удалось получить цены стакана")
-            balance_running = False
+            print(f"[{ticker}] Не удалось получить цены")
             return
         
-        print(f"Лучший Bid: {best_bid:.3f}, лучший Ask: {best_ask:.3f}")
+        print(f"\n[{ticker}] Bid: {best_bid:.3f}, Ask: {best_ask:.3f}")
         
-        # Удаляем все существующие заявки
-        print("Удаляю все заявки...")
-        orders = await api.get_orders(FIGI)
-        cancelled = 0
+        position = await api.get_position(figi)
+        print(f"[{ticker}] Позиция: {position}")
+        
+        skip_buy = max_qty and position > max_qty
+        skip_sell = min_qty and position < min_qty
+        
+        if skip_buy:
+            print(f"[{ticker}] BUY пропущен (позиция {position} > max {max_qty})")
+        if skip_sell:
+            print(f"[{ticker}] SELL пропущен (позиция {position} < min {min_qty})")
+        
+        orders = await api.get_orders(figi)
         for order in orders:
             order_id = order.get('orderId')
             if order_id:
                 await api.cancel_order(order_id)
-                cancelled += 1
-        print(f"Удалено: {cancelled}")
+        print(f"[{ticker}] Удалено заявок: {len(orders)}")
         
-        # Выставляем лесенку на покупку
-        start_buy = round(best_bid - OFFSET, 3)
-        print(f"Выставляю {TOTAL_ORDERS} заявок на ПОКУПКУ от {start_buy:.3f} вниз ({LOTS_PER_ORDER} лота)...")
+        if not skip_buy:
+            start_buy = round(best_bid - offset_buy, 3)
+            print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f} ({lots} лотов)")
+            
+            for i in range(total_orders):
+                price = round(start_buy - step * i, 3)
+                try:
+                    result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
+                    if 'orderId' in result and i < 3:
+                        print(f"  BUY {i+1}: {lots} @ {price:.3f}")
+                except Exception as e:
+                    if i < 3:
+                        print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
         
-        for i in range(TOTAL_ORDERS):
-            buy_price = round(start_buy - STEP * i, 3)
-            try:
-                result = await api.post_order(FIGI, LOTS_PER_ORDER, 'ORDER_DIRECTION_BUY', buy_price)
-                if 'orderId' in result:
-                    if i < 3 or i >= TOTAL_ORDERS - 1:
-                        print(f"  BUY {i+1}: {LOTS_PER_ORDER} @ {buy_price:.3f}")
-                    elif i == 3:
-                        print(f"  ...")
-            except Exception as e:
-                print(f"  BUY {i+1} ошибка: {str(e)[:50]}")
+        if not skip_sell:
+            start_sell = round(best_ask + offset_sell, 3)
+            print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f} ({lots} лотов)")
+            
+            for i in range(total_orders):
+                price = round(start_sell + step * i, 3)
+                try:
+                    result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
+                    if 'orderId' in result and i < 3:
+                        print(f"  SELL {i+1}: {lots} @ {price:.3f}")
+                except Exception as e:
+                    if i < 3:
+                        print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
         
-        # Выставляем лесенку на продажу
-        start_sell = round(best_ask + OFFSET, 3)
-        print(f"Выставляю {TOTAL_ORDERS} заявок на ПРОДАЖУ от {start_sell:.3f} вверх ({LOTS_PER_ORDER} лота)...")
-        
-        for i in range(TOTAL_ORDERS):
-            sell_price = round(start_sell + STEP * i, 3)
-            try:
-                result = await api.post_order(FIGI, LOTS_PER_ORDER, 'ORDER_DIRECTION_SELL', sell_price)
-                if 'orderId' in result:
-                    if i < 3 or i >= TOTAL_ORDERS - 1:
-                        print(f"  SELL {i+1}: {LOTS_PER_ORDER} @ {sell_price:.3f}")
-                    elif i == 3:
-                        print(f"  ...")
-            except Exception as e:
-                print(f"  SELL {i+1} ошибка: {str(e)[:50]}")
-        
-        print("Лесенка выставлена")
+        print(f"[{ticker}] Готово")
         
     except Exception as e:
         import traceback
-        print(f"Ошибка: {e}")
+        print(f"[{ticker}] Ошибка: {e}")
         print(traceback.format_exc())
+
+
+async def run_all_strategies():
+    """Запускает стратегии для всех инструментов"""
+    print(f"\n{'='*50}")
+    print(f"{datetime.now(MOSCOW_TZ).strftime('%H:%M:%S')} мск - Запуск стратегий")
+    print(f"{'='*50}")
     
-    finally:
-        last_balance_time = datetime.now()
-        balance_running = False
+    tasks = [run_instrument(inst) for inst in INSTRUMENTS]
+    await asyncio.gather(*tasks)

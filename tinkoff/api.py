@@ -20,13 +20,18 @@ def init(token, base_url='https://invest-public-api.tbank.ru'):
 # Обёртка над Tinkoff Invest API
 class TinkoffAPI:
     
-    def __init__(self):
+    def __init__(self, token=None):
+        import ssl
         self.account_id = None
+        self.token = token or TOKEN
+        self.ssl_context = ssl.create_default_context()
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
     
     # Внутренний метод для HTTP запросов к API
     async def _request(self, method, url, data=None):
-        headers = {'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        headers = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'}
+        connector = aiohttp.TCPConnector(ssl=self.ssl_context)
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(url, json=data or {}, headers=headers) as resp:
                 return await resp.json()

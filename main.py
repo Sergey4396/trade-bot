@@ -1,28 +1,22 @@
 #!/usr/bin/env python3
-import os
 import asyncio
 from datetime import datetime, timezone, timedelta
-from tinkoff.api import TinkoffAPI, init as init_api
-from tinkoff.balance_strategy import run_balance_strategy, FIGI
-
-TOKEN = os.environ.get('TINKOFF_TOKEN', 't.KNbRWnr_MoKUOuBfzvjyUTUYftgAdZhpZ4zBqfwkgYtd4wnOaYuHCJHAeRXounciZ3N4NSQGPtH-8v5Mw0f_fQ')
+from tinkoff.balance_strategy import run_all_strategies
+from tinkoff.config import TOKENS, INSTRUMENTS
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
-
-init_api(TOKEN)
-api = TinkoffAPI()
 
 
 async def main():
     print("Tinkoff Trading Bot - Лесенка")
-    print(f"FIGI: {FIGI}")
-    
-    await api.get_account_id()
-    print(f"Account ID: {api.account_id}")
+    print(f"Аккаунтов: {len(TOKENS)}")
+    print(f"Инструментов: {len(INSTRUMENTS)}")
+    for inst in INSTRUMENTS:
+        print(f"  - {inst['ticker']} ({inst['figi']}) @ {inst['account']}")
     
     while True:
         try:
-            await run_balance_strategy(api)
+            await run_all_strategies()
             for _ in range(60):
                 await asyncio.sleep(10)
                 now_utc = datetime.now(timezone.utc)
