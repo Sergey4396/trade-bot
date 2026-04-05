@@ -56,6 +56,8 @@ async def run_instrument(instrument):
         print(f"[{ticker}] Не удалось получить account_id")
         return
     
+    print(f"[{ticker}] account_id: {api.account_id} (токен: {account_id})")
+    
     trade_hours = instrument.get('trade_hours', {})
     if not is_trading_time(trade_hours):
         return
