@@ -9,6 +9,7 @@ from tinkoff.config import TOKENS, INSTRUMENTS
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
 apis = {}
+last_run_times = {}
 
 
 def get_api(account_id):
@@ -49,6 +50,7 @@ async def run_instrument(instrument):
     account_id = instrument['account']
     figi = instrument['figi']
     ticker = instrument['ticker']
+    interval = instrument.get('interval', 600)
     
     api = get_api(account_id)
     
@@ -60,6 +62,12 @@ async def run_instrument(instrument):
     
     trade_hours = instrument.get('trade_hours', {})
     if not is_trading_time(trade_hours):
+        return
+    
+    # Проверяем интервал для конкретного инструмента
+    inst_key = f"{account_id}:{figi}"
+    last_time = last_run_times.get(inst_key)
+    if last_time and (datetime.now() - last_time).total_seconds() < interval:
         return
     
     step = instrument.get('step', 0.001)
@@ -126,6 +134,7 @@ async def run_instrument(instrument):
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
         
         print(f"[{ticker}] Готово")
+        last_run_times[inst_key] = datetime.now()
         
     except Exception as e:
         import traceback
