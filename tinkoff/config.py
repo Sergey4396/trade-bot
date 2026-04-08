@@ -21,7 +21,7 @@ INSTRUMENTS = [
         'step': 0.001,
         'offset_buy': 0.002,
         'offset_sell': 0.002,
-        'lots_per_order': 3,
+        'lots_per_order': 6,
         'total_orders': 60,
         'interval': 600,
         'min_qty': None,
