@@ -136,6 +136,7 @@ async def run_instrument(instrument):
     account_id = instrument['account']
     figi = instrument['figi']
     ticker = instrument['ticker']
+    inst_key = f"{account_id}:{figi}"
     
     api = get_api(account_id)
     
@@ -217,7 +218,6 @@ async def run_instrument(instrument):
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
         
         print(f"[{ticker}] Готово")
-        inst_key = f"{account_id}:{figi}"
         last_run_times[inst_key] = datetime.now()
         
     except Exception as e:
