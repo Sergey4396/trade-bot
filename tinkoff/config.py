@@ -10,10 +10,19 @@ TOKENS = {
     'brok': 't.NrbE-4GJQ1iPddozQRlpOEY6q1tCvM_-fa5sLrUf2-KbJEtXaonz_Bn6kbPlQjkremLjYNSPrD_V6q9F7qbovQ',
 }
 
-# Список инструментов
-# lots_mode: 'fixed' - фиксированное кол-во лотов
-#            'increasing' - увеличивающееся (base_lots + lots_increment * i)
-#            'custom' - кастомные массивы через lots_by_position
+# lots_mode:
+#   'fixed'      - фиксированное кол-во (lots_per_order)
+#   'increasing'  - увеличивающееся (base_lots + lots_increment * i)
+#   'custom'      - кастомные массивы по условиям позиции
+
+# Пример custom режима:
+#   'lots_conditions': [
+#       {'min': 200, 'max': None, 'array': [3, 3, 3, ...]},   # позиция > 200
+#       {'min': 100, 'max': 200, 'array': [2, 2, 2, ...]},    # 100 <= позиция <= 200
+#       {'min': None, 'max': 100, 'array': [1, 1, 1, ...]},   # позиция < 100
+#   ],
+#   'lots_default': [1, 1, 1, ...],
+
 INSTRUMENTS = [
     {
         'account': 'acc1',
@@ -32,19 +41,12 @@ INSTRUMENTS = [
             'end_minute': 30,
             'skip_hours': [(9, 50, 10, 0)],
         },
-        # Режим заявок
         'lots_mode': 'fixed',
         'lots_per_order': 6,
-        # Для increasing:
         'base_lots': 3,
         'lots_increment': 1,
-        # Для custom - массивы по условиям позиции:
-        # 'pos_gt_100': позиция > 100
-        # 'pos_lt_50': позиция < 50
-        # 'pos_between_50_100': 50 <= позиция <= 100
-        'lots_by_position': {},
-        # Расписание (если указано, interval игнорируется):
-        # 'run_at': {'weekdays': '09:01', 'weekend': '10:01'},
+        'lots_conditions': [],
+        'lots_default': [1] * 60,
         'run_at': None,
     },
 
@@ -69,7 +71,8 @@ INSTRUMENTS = [
         'lots_per_order': 1,
         'base_lots': 3,
         'lots_increment': 1,
-        'lots_by_position': {},
+        'lots_conditions': [],
+        'lots_default': [1] * 60,
         'run_at': None,
     },
 
@@ -94,7 +97,8 @@ INSTRUMENTS = [
         'lots_per_order': 1,
         'base_lots': 3,
         'lots_increment': 1,
-        'lots_by_position': {},
+        'lots_conditions': [],
+        'lots_default': [1] * 60,
         'run_at': None,
     },
 ]

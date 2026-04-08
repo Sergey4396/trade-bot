@@ -94,33 +94,23 @@ def get_lots_for_order(instrument, position, order_index):
         return base + increment * order_index
     
     elif mode == 'custom':
-        lots_by_pos = instrument.get('lots_by_position', {})
+        conditions = instrument.get('lots_conditions', [])
+        default_array = instrument.get('lots_default', [1] * 60)
         lots_array = None
         
-        for key, array in lots_by_pos.items():
-            if key == 'default':
-                continue
+        for cond in conditions:
+            min_val = cond.get('min')  # None = без ограничения снизу
+            max_val = cond.get('max')  # None = без ограничения сверху
             
-            if key.startswith('pos_gt_'):
-                threshold = int(key.split('_')[-1])
-                if position > threshold:
-                    lots_array = array
-                    break
-            elif key.startswith('pos_lt_'):
-                threshold = int(key.split('_')[-1])
-                if position < threshold:
-                    lots_array = array
-                    break
-            elif '_between_' in key:
-                parts = key.split('_')
-                low = int(parts[2])
-                high = int(parts[-1])
-                if low <= position <= high:
-                    lots_array = array
-                    break
+            min_ok = min_val is None or position >= min_val
+            max_ok = max_val is None or position <= max_val
+            
+            if min_ok and max_ok:
+                lots_array = cond.get('array', default_array)
+                break
         
         if not lots_array:
-            lots_array = lots_by_pos.get('default', [1] * 60)
+            lots_array = default_array
         
         # Расширяем массив если нужно
         while len(lots_array) < order_index + 1:
