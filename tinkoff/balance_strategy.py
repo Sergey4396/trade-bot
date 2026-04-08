@@ -81,7 +81,7 @@ def should_run_now(instrument):
     return False
 
 
-def get_lots_for_order(instrument, position, order_index):
+def get_lots_for_order(instrument, position, order_index, direction=None):
     """Получает количество лотов для заявки в зависимости от режима"""
     mode = instrument.get('lots_mode', 'fixed')
     
@@ -106,13 +106,17 @@ def get_lots_for_order(instrument, position, order_index):
             max_ok = max_val is None or position <= max_val
             
             if min_ok and max_ok:
-                lots_array = cond.get('array', default_array)
+                if direction == 'BUY':
+                    lots_array = cond.get('buy_array', cond.get('array', default_array))
+                elif direction == 'SELL':
+                    lots_array = cond.get('sell_array', cond.get('array', default_array))
+                else:
+                    lots_array = cond.get('array', default_array)
                 break
         
         if not lots_array:
             lots_array = default_array
         
-        # Расширяем массив если нужно
         while len(lots_array) < order_index + 1:
             lots_array.append(lots_array[-1] if lots_array else 1)
         
@@ -183,7 +187,7 @@ async def run_instrument(instrument):
             
             for i in range(total_orders):
                 price = round(start_buy - step * i, 3)
-                lots = get_lots_for_order(instrument, position, i)
+                lots = get_lots_for_order(instrument, position, i, 'BUY')
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result and i < 3:
@@ -198,7 +202,7 @@ async def run_instrument(instrument):
             
             for i in range(total_orders):
                 price = round(start_sell + step * i, 3)
-                lots = get_lots_for_order(instrument, position, i)
+                lots = get_lots_for_order(instrument, position, i, 'SELL')
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result and i < 3:

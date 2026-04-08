@@ -26,6 +26,36 @@ TOKENS = {
 INSTRUMENTS = [
     {
         'account': 'acc1',
+        'figi': 'FUTNGM062600',
+        'ticker': 'NRM6',
+        'step': 0.010,
+        'offset_buy': 0.015,
+        'offset_sell': 0.015,
+        'total_orders': 10,
+        'interval': None,
+        'min_qty': None,
+        'max_qty': None,
+        'trade_hours': {
+            'start': 9,
+            'end': 23,
+            'end_minute': 30,
+            'skip_hours': [(9, 50, 10, 0)],
+        },
+        'lots_mode': 'custom',
+        'lots_per_order': 1,
+        'base_lots': 1,
+        'lots_increment': 0,
+        'lots_conditions': [
+            {'min': -20, 'max': 200, 'buy_array': [1,2,3,4,5,6,7,8,9,10], 'sell_array': [1,2,3,4,5,6,7,8,9,10]},
+            {'min': -200, 'max': -20, 'buy_array': [1,2,3,4,5,6,7,8,9,10], 'sell_array': [0,1,2,3,4,5,6,7,8,9]},
+        ],
+        'lots_default': [1] * 10,
+        'run_at': {'weekdays': '09:01', 'weekend': '10:01'},
+    },
+
+
+    {
+        'account': 'acc1',
         'figi': 'FUTNGM042600',
         'ticker': 'NRJ6',
         'step': 0.001,
