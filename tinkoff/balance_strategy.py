@@ -45,12 +45,97 @@ def is_trading_time(trade_hours):
     return True
 
 
+def should_run_now(instrument):
+    """Проверяет, нужно ли запускать сейчас"""
+    run_at = instrument.get('run_at')
+    
+    if not run_at:
+        # Используем interval
+        interval = instrument.get('interval', 600)
+        inst_key = f"{instrument['account']}:{instrument['figi']}"
+        last_time = last_run_times.get(inst_key)
+        if last_time and (datetime.now() - last_time).total_seconds() < interval:
+            return False
+        return True
+    
+    # Проверяем расписание
+    now_utc = datetime.now(timezone.utc)
+    now_moscow = now_utc.astimezone(MOSCOW_TZ)
+    weekday = now_moscow.weekday()  # 0=Mon, 5=Sat, 6=Sun
+    
+    if weekday >= 5:
+        # Выходные
+        target_time = run_at.get('weekend')
+    else:
+        # Будни
+        target_time = run_at.get('weekdays')
+    
+    if not target_time:
+        return False
+    
+    target_hour, target_minute = map(int, target_time.split(':'))
+    
+    if now_moscow.hour == target_hour and now_moscow.minute == target_minute:
+        return True
+    
+    return False
+
+
+def get_lots_for_order(instrument, position, order_index):
+    """Получает количество лотов для заявки в зависимости от режима"""
+    mode = instrument.get('lots_mode', 'fixed')
+    
+    if mode == 'fixed':
+        return instrument.get('lots_per_order', 1)
+    
+    elif mode == 'increasing':
+        base = instrument.get('base_lots', 1)
+        increment = instrument.get('lots_increment', 1)
+        return base + increment * order_index
+    
+    elif mode == 'custom':
+        lots_by_pos = instrument.get('lots_by_position', {})
+        lots_array = None
+        
+        for key, array in lots_by_pos.items():
+            if key == 'default':
+                continue
+            
+            if key.startswith('pos_gt_'):
+                threshold = int(key.split('_')[-1])
+                if position > threshold:
+                    lots_array = array
+                    break
+            elif key.startswith('pos_lt_'):
+                threshold = int(key.split('_')[-1])
+                if position < threshold:
+                    lots_array = array
+                    break
+            elif '_between_' in key:
+                parts = key.split('_')
+                low = int(parts[2])
+                high = int(parts[-1])
+                if low <= position <= high:
+                    lots_array = array
+                    break
+        
+        if not lots_array:
+            lots_array = lots_by_pos.get('default', [1] * 60)
+        
+        # Расширяем массив если нужно
+        while len(lots_array) < order_index + 1:
+            lots_array.append(lots_array[-1] if lots_array else 1)
+        
+        return lots_array[order_index]
+    
+    return 1
+
+
 async def run_instrument(instrument):
     """Запускает стратегию для одного инструмента"""
     account_id = instrument['account']
     figi = instrument['figi']
     ticker = instrument['ticker']
-    interval = instrument.get('interval', 600)
     
     api = get_api(account_id)
     
@@ -64,16 +149,12 @@ async def run_instrument(instrument):
     if not is_trading_time(trade_hours):
         return
     
-    # Проверяем интервал для конкретного инструмента
-    inst_key = f"{account_id}:{figi}"
-    last_time = last_run_times.get(inst_key)
-    if last_time and (datetime.now() - last_time).total_seconds() < interval:
+    if not should_run_now(instrument):
         return
     
     step = instrument.get('step', 0.001)
     offset_buy = instrument.get('offset_buy', 0.002)
     offset_sell = instrument.get('offset_sell', 0.002)
-    lots = instrument.get('lots_per_order', 1)
     total_orders = instrument.get('total_orders', 60)
     min_qty = instrument.get('min_qty')
     max_qty = instrument.get('max_qty')
@@ -107,10 +188,11 @@ async def run_instrument(instrument):
         
         if not skip_buy:
             start_buy = round(best_bid - offset_buy, 3)
-            print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f} ({lots} лотов)")
+            print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f}")
             
             for i in range(total_orders):
                 price = round(start_buy - step * i, 3)
+                lots = get_lots_for_order(instrument, position, i)
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result and i < 3:
@@ -121,10 +203,11 @@ async def run_instrument(instrument):
         
         if not skip_sell:
             start_sell = round(best_ask + offset_sell, 3)
-            print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f} ({lots} лотов)")
+            print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f}")
             
             for i in range(total_orders):
                 price = round(start_sell + step * i, 3)
+                lots = get_lots_for_order(instrument, position, i)
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result and i < 3:
@@ -134,6 +217,7 @@ async def run_instrument(instrument):
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
         
         print(f"[{ticker}] Готово")
+        inst_key = f"{account_id}:{figi}"
         last_run_times[inst_key] = datetime.now()
         
     except Exception as e:
