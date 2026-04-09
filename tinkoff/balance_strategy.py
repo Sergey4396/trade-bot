@@ -48,37 +48,35 @@ def is_trading_time(trade_hours):
 def should_run_now(instrument):
     """Проверяет, нужно ли запускать сейчас"""
     run_at = instrument.get('run_at')
+    interval = instrument.get('interval')
+    inst_key = f"{instrument['account']}:{instrument['figi']}"
+    last_time = last_run_times.get(inst_key)
     
-    if not run_at:
-        # Используем interval
-        interval = instrument.get('interval', 600)
-        inst_key = f"{instrument['account']}:{instrument['figi']}"
-        last_time = last_run_times.get(inst_key)
-        if last_time and (datetime.now() - last_time).total_seconds() < interval:
-            return False
-        return True
-    
-    # Проверяем расписание
     now_utc = datetime.now(timezone.utc)
     now_moscow = now_utc.astimezone(MOSCOW_TZ)
-    weekday = now_moscow.weekday()  # 0=Mon, 5=Sat, 6=Sun
     
-    if weekday >= 5:
-        # Выходные
-        target_time = run_at.get('weekend')
-    else:
-        # Будни
-        target_time = run_at.get('weekdays')
+    # Если есть run_at - проверяем расписание
+    if run_at:
+        weekday = now_moscow.weekday()
+        if weekday >= 5:
+            target_time = run_at.get('weekend')
+        else:
+            target_time = run_at.get('weekdays')
+        
+        if target_time:
+            target_hour, target_minute = map(int, target_time.split(':'))
+            if now_moscow.hour < target_hour or (now_moscow.hour == target_hour and now_moscow.minute < target_minute):
+                return False
     
-    if not target_time:
-        return False
-    
-    target_hour, target_minute = map(int, target_time.split(':'))
-    
-    if now_moscow.hour == target_hour and now_moscow.minute == target_minute:
+    # Проверяем интервал (если указан)
+    if interval:
+        if last_time and (datetime.now() - last_time).total_seconds() < interval:
+            return False
+    elif not run_at:
+        # Если нет ни run_at, ни interval - всегда запускаем
         return True
     
-    return False
+    return True
 
 
 def get_lots_for_order(instrument, position, order_index, direction=None):

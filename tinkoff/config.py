@@ -52,7 +52,31 @@ INSTRUMENTS = [
         'lots_default': [1] * 10,
         'run_at': {'weekdays': '10:01', 'weekend': '10:01'},
     },
-
+    {
+        'account': 'acc1',
+        'figi': 'FUTNGM052600',
+        'ticker': 'NRK6',
+        'step': 0.002,
+        'offset_buy': 0.002,
+        'offset_sell': 0.002,
+        'total_orders': 20,
+        'interval': 1200,
+        'min_qty': None,
+        'max_qty': None,
+        'trade_hours': {
+            'start': 9,
+            'end': 23,
+            'end_minute': 30,
+            'skip_hours': [(9, 50, 10, 0)],
+        },
+        'lots_mode': 'custom',
+        'lots_conditions': [
+            {'min': -20, 'max': 200, 'buy_array': [1,2,3,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5], 'sell_array': [1,2,3,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]},
+            {'min': -200, 'max': -20, 'buy_array': [1,2,3,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5], 'sell_array': [0,0,1,2,3,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5]},
+        ],
+        'lots_default': [1] * 20,
+        'run_at': {'weekdays': '09:01', 'weekend': '10:01'},
+    },
 
     {
         'account': 'acc1',
