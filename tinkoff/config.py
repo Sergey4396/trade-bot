@@ -50,7 +50,7 @@ INSTRUMENTS = [
             {'min': -200, 'max': -20, 'buy_array': [1,2,3,4,5,6,7,8,9,10], 'sell_array': [0,1,2,3,4,5,6,7,8,9]},
         ],
         'lots_default': [1] * 10,
-        'run_at': {'weekdays': '09:01', 'weekend': '10:01'},
+        'run_at': {'weekdays': '10:01', 'weekend': '10:01'},
     },
 
 
