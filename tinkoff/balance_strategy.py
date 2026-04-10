@@ -195,7 +195,12 @@ async def run_instrument(instrument):
         for order in orders:
             order_id = order.get('orderId')
             if order_id:
-                await api.cancel_order(order_id)
+                try:
+                    await api.cancel_order(order_id)
+                except Exception as e:
+                    if '429' not in str(e):
+                        print(f"[{ticker}] Ошибка отмены: {str(e)[:50]}")
+                await asyncio.sleep(0.1)
         print(f"[{ticker}] Удалено заявок: {len(orders)}")
         
         if not skip_buy:
@@ -212,6 +217,7 @@ async def run_instrument(instrument):
                 except Exception as e:
                     if i < 3:
                         print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
+                await asyncio.sleep(0.05)
         
         if not skip_sell:
             start_sell = round(best_ask + offset_sell, 3)
@@ -227,6 +233,7 @@ async def run_instrument(instrument):
                 except Exception as e:
                     if i < 3:
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
+                await asyncio.sleep(0.05)
         
         print(f"[{ticker}] Готово")
         last_run_times[inst_key] = datetime.now()
