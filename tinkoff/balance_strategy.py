@@ -106,6 +106,8 @@ def get_lots_for_order(instrument, position, order_index, direction=None):
         default_array = instrument.get('lots_default', [1] * 60)
         lots_array = None
         
+        print(f"[DEBUG get_lots] position={position}, direction={direction}, conditions_count={len(conditions)}")
+        
         for cond in conditions:
             min_val = cond.get('min')  # None = без ограничения снизу
             max_val = cond.get('max')  # None = без ограничения сверху
@@ -113,17 +115,24 @@ def get_lots_for_order(instrument, position, order_index, direction=None):
             min_ok = min_val is None or position >= min_val
             max_ok = max_val is None or position <= max_val
             
+            print(f"[DEBUG get_lots]   condition: min={min_val}, max={max_val}, min_ok={min_ok}, max_ok={max_ok}")
+            
             if min_ok and max_ok:
                 if direction == 'BUY':
                     lots_array = cond.get('buy_array', cond.get('array', default_array))
+                    print(f"[DEBUG get_lots]   MATCHED BUY: using buy_array")
                 elif direction == 'SELL':
                     lots_array = cond.get('sell_array', cond.get('array', default_array))
+                    print(f"[DEBUG get_lots]   MATCHED SELL: using sell_array")
                 else:
                     lots_array = cond.get('array', default_array)
                 break
         
         if not lots_array:
             lots_array = default_array
+            print(f"[DEBUG get_lots]   USING DEFAULT")
+        
+        print(f"[DEBUG get_lots]   lots_array len={len(lots_array)}, returning lots_array[{order_index}]={lots_array[order_index] if order_index < len(lots_array) else 'N/A'}")
         
         while len(lots_array) < order_index + 1:
             lots_array.append(lots_array[-1] if lots_array else 1)
