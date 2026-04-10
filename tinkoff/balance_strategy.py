@@ -55,6 +55,8 @@ def should_run_now(instrument):
     now_utc = datetime.now(timezone.utc)
     now_moscow = now_utc.astimezone(MOSCOW_TZ)
     
+    print(f"[DEBUG should_run_now] {instrument['ticker']}: now={now_moscow.strftime('%H:%M')}, run_at={run_at}, interval={interval}, last_time={last_time}")
+    
     # Если есть run_at - проверяем расписание
     if run_at:
         weekday = now_moscow.weekday()
@@ -63,19 +65,27 @@ def should_run_now(instrument):
         else:
             target_time = run_at.get('weekdays')
         
+        print(f"[DEBUG should_run_now] weekday={weekday}, target_time={target_time}")
+        
         if target_time:
             target_hour, target_minute = map(int, target_time.split(':'))
             if now_moscow.hour < target_hour or (now_moscow.hour == target_hour and now_moscow.minute < target_minute):
+                print(f"[DEBUG should_run_now] Before target time, skipping")
                 return False
     
     # Проверяем интервал (если указан)
     if interval:
-        if last_time and (datetime.now() - last_time).total_seconds() < interval:
-            return False
+        if last_time:
+            elapsed = (datetime.now() - last_time).total_seconds()
+            print(f"[DEBUG should_run_now] elapsed={elapsed}s, interval={interval}s")
+            if elapsed < interval:
+                print(f"[DEBUG should_run_now] Within interval, skipping")
+                return False
     elif not run_at:
         # Если нет ни run_at, ни interval - всегда запускаем
         return True
     
+    print(f"[DEBUG should_run_now] Should run!")
     return True
 
 
