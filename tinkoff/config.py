@@ -219,10 +219,10 @@ INSTRUMENTS = [
         'figi': 'FUTNGM042600',
         'ticker': 'NRJ6',
         'step': 0.001,
-        'offset_buy': 0.002,
-        'offset_sell': 0.002,
+        'offset_buy': 0.005,
+        'offset_sell': 0.005,
         'total_orders': 60,
-        'interval': 600,
+        'interval': 6000,
         'min_qty': None,
         'max_qty': None,
         'trade_hours': {
