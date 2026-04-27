@@ -72,6 +72,11 @@ def should_run_now(instrument):
             if now_moscow.hour < target_hour or (now_moscow.hour == target_hour and now_moscow.minute < target_minute):
                 print(f"[DEBUG should_run_now] Before target time, skipping")
                 return False
+            
+            # Если есть run_at но нет interval - проверяем запускали ли сегодня
+            if interval is None and last_time and last_time.date() == now_moscow.date():
+                print(f"[DEBUG should_run_now] Already ran today")
+                return False
     
     # Проверяем интервал (если указан)
     if interval:

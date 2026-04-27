@@ -37,7 +37,7 @@ INSTRUMENTS = [
             'offset_buy': 0.009,
             'offset_sell': 0.009,
             'total_orders': 60,
-            'interval': 60000,
+            'interval': None,
             'min_qty': -5000,
             'max_qty': 5200,
             'trade_hours': {
