@@ -8,10 +8,32 @@ if not TOKEN:
     exit(1)
 
 fp = FinamPy(TOKEN)
-tickers = list(fp.tickers)
-print(f'Всего тикеров: {len(tickers)}')
 
-# Ищем газ
+# Пробуем получить тикеры разными способами
+tickers = []
+try:
+    for t in fp.tickers:
+        tickers.append(t)
+except:
+    pass
+
+if not tickers:
+    try:
+        tickers = fp.tickers_list
+    except:
+        pass
+
+if not tickers:
+    # Пробуем через MarketData
+    try:
+        from FinamPy.Market import Market
+        m = Market(TOKEN)
+        tkr = m.tickers()
+        tickers = list(tkr)
+    except Exception as e:
+        print(f"Ошибка: {e}")
+
+print(f'Тикеров: {len(tickers)}')
 for t in tickers:
-    if 'NR' in t or 'GZ' in t or 'GA' in t or 'GAS' in t:
+    if 'NR' in t or 'GZ' in t or 'GA' in t:
         print(t)
