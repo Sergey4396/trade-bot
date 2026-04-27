@@ -13,7 +13,7 @@ from finam_trade_api import Client, TokenManager
 from google.type.decimal_pb2 import Decimal
 
 TOKEN = os.environ.get('FINAM_TOKEN', '')
-SYMBOL = 'NRJ6@FORTS'
+SYMBOL = 'NRJ6@MISX'
 PRICE_DELTA = 0.020
 INITIAL_ORDER_PRICE = 3.030
 INITIAL_ORDER_SIDE = 'SELL'  # Пробуем сначала продать
