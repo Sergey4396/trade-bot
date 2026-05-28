@@ -64,8 +64,8 @@ INSTRUMENTS = [
                     'figi': 'FUTNG0626000',
                     'ticker': 'NGM6',
                     'step': 0.010,
-                    'offset_buy': 0.010,
-                    'offset_sell': 0.010,
+                    'offset_buy': 0.040,
+                    'offset_sell': 0.40,
                     'total_orders': 12,
                     'interval': None,
                     'min_qty': -20,
@@ -78,7 +78,8 @@ INSTRUMENTS = [
                     },
                     'lots_mode': 'custom',
                     'lots_conditions': [
-                    {'min': -20, 'max': -5, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1], 'sell_array': [0,0,1,1,1,1,1,1,1,1,1,1]},
+                    {'min': -20, 'max': -11, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1], 'sell_array': [0,0,0,1,1,1,1,1,1,1,1,1]},
+                    {'min': -10, 'max': -5, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1], 'sell_array': [0,0,1,1,1,1,1,1,1,1,1,1]},
                     {'min': -4, 'max': 18, 'buy_array': [0,1,1,1,1,1,1,1,1,1,1,1], 'sell_array': [0,1,1,1,1,1,1,1,1,1,1,1]},
                     {'min': 19, 'max': 30, 'buy_array': [0,0,1,1,1,1,1,1,1,1,1,1], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1]},
 
