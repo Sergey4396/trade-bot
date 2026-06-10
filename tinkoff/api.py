@@ -107,6 +107,14 @@ class TinkoffAPI:
                 return int(pos.get('balance', 0)) + int(pos.get('blocked', 0))
         return 0
     
+    # Получить последнюю цену закрытия
+    async def get_last_price(self, figi):
+        data = await self._request('GetLastPrices', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices', {'figi': [figi]})
+        prices = data.get('lastPrices', [])
+        if prices:
+            return self._parse_price(prices[0].get('price', {}))
+        return None
+
     # Получить текстовый статус (для HTTP)
     async def status_text(self, figi):
         orders = await self.get_orders(figi)
