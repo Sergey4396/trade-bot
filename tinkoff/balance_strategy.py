@@ -158,11 +158,53 @@ async def run_last_close_strategy(instrument, api):
 
 
 async def last_close_worker(instrument, api):
-    """Воркер: ждёт точного времени, выставляет заявки от last_close"""
+    """Воркер: ждёт primary time (run_at), при ошибке повторяет в secondary time"""
     ticker = instrument['ticker']
     figi = instrument['figi']
     inst_key = f"{instrument['account']}:{figi}"
     run_at = instrument['run_at']
+
+    while True:
+        now = datetime.now(MOSCOW_TZ)
+        weekday = now.weekday()
+
+        primary_str = run_at.get('weekdays') if weekday < 5 else run_at.get('weekend')
+        secondary_str = run_at.get('weekend') if weekday < 5 else run_at.get('weekdays')
+
+        primary_h, primary_m = map(int, primary_str.split(':'))
+        primary_target = now.replace(hour=primary_h, minute=primary_m, second=0, microsecond=0)
+        if primary_target <= now:
+            primary_target += timedelta(days=1)
+
+        wait = (primary_target - now).total_seconds()
+        print(f"[{ticker}] Ожидание {primary_target.strftime('%m/%d %H:%M')} (через {wait:.0f} сек)")
+        await asyncio.sleep(wait)
+
+        now = datetime.now(MOSCOW_TZ)
+        if inst_key in last_run_times and last_run_times[inst_key].date() == now.date():
+            continue
+
+        success = await place_orders_from_last_close(instrument, api, 'первичная')
+        if success:
+            last_run_times[inst_key] = now
+            continue
+
+        if secondary_str:
+            sec_h, sec_m = map(int, secondary_str.split(':'))
+            sec_target = now.replace(hour=sec_h, minute=sec_m, second=0, microsecond=0)
+            if sec_target > now:
+                wait = (sec_target - now).total_seconds()
+                print(f"[{ticker}] Повтор в {sec_target.strftime('%H:%M')} (через {wait:.0f} сек)")
+                await asyncio.sleep(wait)
+                await place_orders_from_last_close(instrument, api, 'вторичная')
+
+        last_run_times[inst_key] = datetime.now()
+
+
+async def place_orders_from_last_close(instrument, api, attempt_label=''):
+    """Выставляет заявки от last_close. Возвращает True при успехе."""
+    ticker = instrument['ticker']
+    figi = instrument['figi']
     step = instrument.get('step', 0.001)
     offset_buy = instrument.get('offset_buy', 0.006)
     offset_sell = instrument.get('offset_sell', 0.006)
@@ -170,45 +212,29 @@ async def last_close_worker(instrument, api):
     min_qty = instrument.get('min_qty')
     max_qty = instrument.get('max_qty')
 
-    while True:
-        now = datetime.now(MOSCOW_TZ)
-        weekday = now.weekday()
-        target_str = run_at.get('weekend') if weekday >= 5 else run_at.get('weekdays')
-        target_hour, target_minute = map(int, target_str.split(':'))
+    try:
+        last_price = await api.get_last_price(figi)
+    except Exception as e:
+        print(f"[{ticker}] {attempt_label}: ошибка получения цены: {e}")
+        return False
 
-        target = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
+    if not last_price:
+        print(f"[{ticker}] {attempt_label}: цена не получена")
+        return False
 
-        wait_seconds = (target - now).total_seconds()
-        print(f"[{ticker}] Следующий запуск: {target.strftime('%m/%d %H:%M')} (через {wait_seconds:.0f} сек)")
-        await asyncio.sleep(wait_seconds)
+    print(f"\n[{ticker}] {attempt_label} — Last close: {last_price:.3f}")
 
-        now = datetime.now(MOSCOW_TZ)
-        if inst_key in last_run_times and last_run_times[inst_key].date() == now.date():
-            print(f"[{ticker}] Уже запускались сегодня")
-            continue
-
-        try:
-            last_price = await api.get_last_price(figi)
-        except Exception as e:
-            print(f"[{ticker}] Ошибка получения цены: {e}")
-            await asyncio.sleep(60)
-            continue
-
-        if not last_price:
-            print(f"[{ticker}] Цена не получена")
-            await asyncio.sleep(60)
-            continue
-
-        print(f"\n[{ticker}] Last close: {last_price:.3f}")
-
+    try:
         position = await api.get_position(figi)
-        print(f"[{ticker}] Позиция: {position}")
+    except Exception as e:
+        print(f"[{ticker}] {attempt_label}: ошибка позиции: {e}")
+        return False
+    print(f"[{ticker}] Позиция: {position}")
 
-        skip_buy = max_qty and position > max_qty
-        skip_sell = min_qty and position < min_qty
+    skip_buy = max_qty and position > max_qty
+    skip_sell = min_qty and position < min_qty
 
+    try:
         orders = await api.get_orders(figi)
         for order in orders:
             order_id = order.get('orderId')
@@ -218,41 +244,47 @@ async def last_close_worker(instrument, api):
                 except Exception as e:
                     if '429' not in str(e):
                         print(f"[{ticker}] Ошибка отмены: {str(e)[:50]}")
+                        return False
                 await asyncio.sleep(0.1)
-        print(f"[{ticker}] Отменено заявок: {len(orders)}")
+    except Exception as e:
+        print(f"[{ticker}] {attempt_label}: ошибка отмены ордеров: {e}")
+        return False
+    print(f"[{ticker}] Отменено заявок: {len(orders)}")
 
-        if not skip_buy:
-            start_buy = round(last_price - offset_buy, 3)
-            print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f} (от last_close {last_price:.3f})")
-            for i in range(total_orders):
-                price = round(start_buy - step * i, 3)
-                lots = get_lots_for_order(instrument, position, i, 'BUY')
-                try:
-                    result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
-                    if 'orderId' in result and i < 3:
-                        print(f"  BUY {i+1}: {lots} @ {price:.3f}")
-                except Exception as e:
-                    if i < 3:
-                        print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
-                await asyncio.sleep(0.05)
+    if not skip_buy:
+        start_buy = round(last_price - offset_buy, 3)
+        print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f}")
+        for i in range(total_orders):
+            price = round(start_buy - step * i, 3)
+            lots = get_lots_for_order(instrument, position, i, 'BUY')
+            try:
+                result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
+                if 'orderId' in result and i < 3:
+                    print(f"  BUY {i+1}: {lots} @ {price:.3f}")
+            except Exception as e:
+                if i < 3:
+                    print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
+                return False
+            await asyncio.sleep(0.05)
 
-        if not skip_sell:
-            start_sell = round(last_price + offset_sell, 3)
-            print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f} (от last_close {last_price:.3f})")
-            for i in range(total_orders):
-                price = round(start_sell + step * i, 3)
-                lots = get_lots_for_order(instrument, position, i, 'SELL')
-                try:
-                    result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
-                    if 'orderId' in result and i < 3:
-                        print(f"  SELL {i+1}: {lots} @ {price:.3f}")
-                except Exception as e:
-                    if i < 3:
-                        print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
-                await asyncio.sleep(0.05)
+    if not skip_sell:
+        start_sell = round(last_price + offset_sell, 3)
+        print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f}")
+        for i in range(total_orders):
+            price = round(start_sell + step * i, 3)
+            lots = get_lots_for_order(instrument, position, i, 'SELL')
+            try:
+                result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
+                if 'orderId' in result and i < 3:
+                    print(f"  SELL {i+1}: {lots} @ {price:.3f}")
+            except Exception as e:
+                if i < 3:
+                    print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
+                return False
+            await asyncio.sleep(0.05)
 
-        print(f"[{ticker}] Готово")
-        last_run_times[inst_key] = datetime.now()
+    print(f"[{ticker}] {attempt_label} — Готово")
+    return True
 
 
 async def run_instrument(instrument):
