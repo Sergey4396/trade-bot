@@ -75,7 +75,7 @@ INSTRUMENTS = [
       'min_qty': 1,
       'max_qty': 300,
       'trade_hours': {
-          'start': 9,
+          'start': 7,
           'end': 23,
           'end_minute': 30,
           'skip_hours': [(9, 50, 10, 0)],
@@ -100,7 +100,7 @@ INSTRUMENTS = [
       'min_qty': -1000,
       'max_qty': -25,
       'trade_hours': {
-          'start': 9,
+          'start': 7,
           'end': 23,
           'end_minute': 30,
           'skip_hours': [(9, 50, 10, 0)],
