@@ -328,6 +328,8 @@ async def run_instrument(instrument):
             for i in range(total_orders):
                 price = round(start_buy - step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'BUY')
+                if not lots:
+                    continue
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result and i < 3:
@@ -344,6 +346,8 @@ async def run_instrument(instrument):
             for i in range(total_orders):
                 price = round(start_sell + step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'SELL')
+                if not lots:
+                    continue
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result and i < 3:
