@@ -150,7 +150,7 @@ def get_lots_for_order(instrument, position, order_index, direction=None):
 
 async def run_last_close_strategy(instrument, api):
     """Запускает воркер для last_close стратегии (1 раз в день по расписанию)"""
-    inst_key = f"{instrument['account']}:{instrument['figi']}"
+    inst_key = f"{instrument['account']}:{instrument['figi']}:last_close"
     if inst_key in last_close_running:
         return
     last_close_running.add(inst_key)
@@ -161,7 +161,7 @@ async def last_close_worker(instrument, api):
     """Воркер: ждёт точного времени, выставляет заявки от last_close"""
     ticker = instrument['ticker']
     figi = instrument['figi']
-    inst_key = f"{instrument['account']}:{figi}"
+    inst_key = f"{instrument['account']}:{figi}:last_close"
     run_at = instrument['run_at']
     step = instrument.get('step', 0.001)
     offset_buy = instrument.get('offset_buy', 0.006)

@@ -70,6 +70,27 @@ INSTRUMENTS = [
             'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
         },
 
+    # Предторговая заявка в 06:58 от цены закрытия: покупка [2,5,7], продажа [10,14,18], отступ 5, интервал 3
+    # Снимается при создании основного сценария SSZ6 выше (07:01 / 10:01)
+    {
+            'account': 'acc1',
+            'figi': 'FSMLT1226000',
+            'ticker': 'SSZ6',
+            'ref_price': 'last_close',
+            'step': 3,
+            'offset_buy': 3,
+            'offset_sell': 3,
+            'total_orders': 15,
+            'min_qty': 6,
+            'max_qty': 4840,
+            'lots_mode': 'custom',
+            'lots_conditions': [
+            {'min': None, 'max': None, 'buy_array': [10,15,20,25,30,35,40,45,50,55,60,65,70,75,80], 'sell_array': [10,15,20,25,30,35,40,45,50,55,60,65,70,75,80]},
+            ],
+            'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+            'run_at': {'weekdays': '06:58', 'weekend': '06:58'},
+        },
+
 # Старый вариант — от last_close, закомментирован для возврата
 # {
 #     'account': 'acc1',
