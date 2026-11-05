@@ -45,7 +45,7 @@ INSTRUMENTS = [
             'ref_price': 'last_close',
             'step': 1,
             'offset_buy': 2,
-            'offset_sell': 2,
+            'offset_sell': 4,
             'total_orders': 25,
             'min_qty': 6,
             'max_qty': 4840,
@@ -64,7 +64,7 @@ INSTRUMENTS = [
                     'ref_price': 'last_close',
                     'step': 1,
                     'offset_buy': 2,
-                    'offset_sell': 2,
+                    'offset_sell': 4,
                     'total_orders': 25,
                     'min_qty': 6,
                     'max_qty': 400,
@@ -95,6 +95,25 @@ INSTRUMENTS = [
                                     'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
                                     'run_at': {'weekdays': '07:01', 'weekend': '07:01'},
                                 },
+
+                  {
+                                                    'account': 'acc1',
+                                                    'figi': 'FBRM06270000',
+                                                    'ticker': 'BMM7',
+                                                    'ref_price': 'last_close',
+                                                    'step': 1,
+                                                    'offset_buy': 1,
+                                                    'offset_sell': 1,
+                                                    'total_orders': 8,
+                                                    'min_qty': 1,
+                                                    'max_qty': 50,
+                                                    'lots_mode': 'custom',
+                                                    'lots_conditions': [
+                                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,]},
+                                                    ],
+                                                    'lots_default': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+                                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+                                                },
 
 
 # Старый вариант — от last_close, закомментирован для возврата
