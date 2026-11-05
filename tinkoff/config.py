@@ -64,7 +64,7 @@ INSTRUMENTS = [
                     'ref_price': 'last_close',
                     'step': 1,
                     'offset_buy': 3,
-                    'offset_sell': 6,
+                    'offset_sell': 9,
                     'total_orders': 25,
                     'min_qty': 6,
                     'max_qty': 400,
