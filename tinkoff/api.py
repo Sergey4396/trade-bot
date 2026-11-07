@@ -71,7 +71,8 @@ class TinkoffAPI:
             await self.get_account_id()
         order_data = {'figi': figi, 'quantity': str(quantity), 'direction': direction, 'accountId': self.account_id, 'orderType': 'ORDER_TYPE_LIMIT'}
         if price:
-            price_str = f"{price:.3f}" if figi.startswith('FUT') else f"{price:.2f}"
+            # FUT и FNGM — газ (обычный и мини), 3 знака; остальные — 2
+            price_str = f"{price:.3f}" if (figi.startswith('FUT') or figi.startswith('FNG')) else f"{price:.2f}"
             parts = price_str.split('.')
             order_data['price'] = {'units': int(parts[0]), 'nano': int(parts[1].ljust(9, '0')[:9])}
         return await self._request('PostOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', order_data)
