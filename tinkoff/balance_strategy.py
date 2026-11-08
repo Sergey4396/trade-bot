@@ -224,13 +224,18 @@ async def last_close_worker(instrument, api):
         if not skip_buy:
             start_buy = round(last_price - offset_buy, 3)
             print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f} (от last_close {last_price:.3f})")
+            projected = position
             for i in range(total_orders):
                 price = round(start_buy - step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'BUY')
+                if max_qty is not None and projected + lots > max_qty:
+                    print(f"  BUY стоп: позиция {position} + {lots} > {max_qty} (проект {projected})")
+                    break
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result and i < 3:
                         print(f"  BUY {i+1}: {lots} @ {price:.3f}")
+                    projected += lots
                 except Exception as e:
                     if i < 3:
                         print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
@@ -239,13 +244,18 @@ async def last_close_worker(instrument, api):
         if not skip_sell:
             start_sell = round(last_price + offset_sell, 3)
             print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f} (от last_close {last_price:.3f})")
+            projected = position
             for i in range(total_orders):
                 price = round(start_sell + step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'SELL')
+                if min_qty is not None and projected - lots < min_qty:
+                    print(f"  SELL стоп: позиция {position} - {lots} < {min_qty} (проект {projected})")
+                    break
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result and i < 3:
                         print(f"  SELL {i+1}: {lots} @ {price:.3f}")
+                    projected -= lots
                 except Exception as e:
                     if i < 3:
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
@@ -324,16 +334,20 @@ async def run_instrument(instrument):
         if not skip_buy:
             start_buy = round(best_bid - offset_buy, 3)
             print(f"[{ticker}] BUY: {total_orders} ордеров от {start_buy:.3f}")
-            
+            projected = position
             for i in range(total_orders):
                 price = round(start_buy - step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'BUY')
                 if not lots:
                     continue
+                if max_qty is not None and projected + lots > max_qty:
+                    print(f"  BUY стоп: позиция {position} + {lots} > {max_qty} (проект {projected})")
+                    break
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_BUY', price)
                     if 'orderId' in result and i < 3:
                         print(f"  BUY {i+1}: {lots} @ {price:.3f}")
+                    projected += lots
                 except Exception as e:
                     if i < 3:
                         print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
@@ -342,16 +356,20 @@ async def run_instrument(instrument):
         if not skip_sell:
             start_sell = round(best_ask + offset_sell, 3)
             print(f"[{ticker}] SELL: {total_orders} ордеров от {start_sell:.3f}")
-            
+            projected = position
             for i in range(total_orders):
                 price = round(start_sell + step * i, 3)
                 lots = get_lots_for_order(instrument, position, i, 'SELL')
                 if not lots:
                     continue
+                if min_qty is not None and projected - lots < min_qty:
+                    print(f"  SELL стоп: позиция {position} - {lots} < {min_qty} (проект {projected})")
+                    break
                 try:
                     result = await api.post_order(figi, lots, 'ORDER_DIRECTION_SELL', price)
                     if 'orderId' in result and i < 3:
                         print(f"  SELL {i+1}: {lots} @ {price:.3f}")
+                    projected -= lots
                 except Exception as e:
                     if i < 3:
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
