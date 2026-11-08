@@ -48,7 +48,7 @@ INSTRUMENTS = [
             'offset_sell': 6,
             'total_orders': 25,
             'min_qty': 1,
-            'max_qty': 4840,
+            'max_qty': 1840,
             'lots_mode': 'custom',
             'lots_conditions': [
             {'min': None, 'max': None, 'buy_array': [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,], 'sell_array': [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,]},
@@ -66,7 +66,7 @@ INSTRUMENTS = [
                     'offset_buy': 3,
                     'offset_sell': 6,
                     'total_orders': 25,
-                    'min_qty': 6,
+                    'min_qty': 1,
                     'max_qty': 400,
                     'lots_mode': 'custom',
                     'lots_conditions': [
@@ -76,7 +76,24 @@ INSTRUMENTS = [
                     'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
                 },
 
-
+{
+            'account': 'acc1',
+            'figi': 'FTRNF0327000',
+            'ticker': 'TNH7',
+            'ref_price': 'last_close',
+            'step': 1,
+            'offset_buy': 3,
+            'offset_sell': 6,
+            'total_orders': 25,
+            'min_qty': 1,
+            'max_qty': 300,
+            'lots_mode': 'custom',
+            'lots_conditions': [
+            {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
+            ],
+            'lots_default': [1,],
+            'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+        },
                 {
                                     'account': 'acc1',
                                     'figi': 'FUTSILVM1226',
