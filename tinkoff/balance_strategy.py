@@ -190,7 +190,14 @@ async def last_close_worker(instrument, api):
             continue
 
         try:
-            last_price = await api.get_last_price(figi)
+            ref_price_key = instrument.get('ref_price', 'last_close')
+            if ref_price_key == 'last_trade':
+                last_price = await api.get_last_trade_price(figi)
+                if not last_price:
+                    print(f"[{ticker}] Своих сделок нет, fallback на last_close")
+                    last_price = await api.get_last_price(figi)
+            else:
+                last_price = await api.get_last_price(figi)
         except Exception as e:
             print(f"[{ticker}] Ошибка получения цены: {e}")
             await asyncio.sleep(60)

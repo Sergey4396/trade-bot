@@ -116,6 +116,24 @@ class TinkoffAPI:
             return self._parse_price(prices[0].get('price', {}))
         return None
 
+    # Получить цену последней СВОЕЙ сделки по инструменту (любой давности)
+    async def get_last_trade_price(self, figi):
+        if not self.account_id:
+            await self.get_account_id()
+        data = await self._request('GetOperationsByCursor',
+            f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetOperationsByCursor',
+            {'accountId': self.account_id, 'limit': 200})
+        items = data.get('items', [])
+        for item in items:
+            if item.get('figi') != figi:
+                continue
+            op_type = item.get('operationType', '')
+            if op_type in ('Buy', 'Sell', 'BuyCard', 'SellCard'):
+                price_obj = item.get('price', {})
+                if price_obj:
+                    return self._parse_price(price_obj)
+        return None
+
     # Получить текстовый статус (для HTTP)
     async def status_text(self, figi):
         orders = await self.get_orders(figi)
