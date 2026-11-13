@@ -94,43 +94,6 @@ INSTRUMENTS = [
             'lots_default': [1,],
             'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
         },
-                {
-                                    'account': 'acc1',
-                                    'figi': 'FUTSILVM1226',
-                                    'ticker': 'S1Z6',
-                                    'ref_price': 'last_close',
-                                    'step': 0.1,
-                                    'offset_buy': 0.30,
-                                    'offset_sell': 0.30,
-                                    'total_orders': 25,
-                                    'min_qty': 6,
-                                    'max_qty': 100,
-                                    'lots_mode': 'custom',
-                                    'lots_conditions': [
-                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
-                                    ],
-                                    'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
-                                },
-
-                  {
-                                                    'account': 'acc1',
-                                                    'figi': 'FBRM06270000',
-                                                    'ticker': 'BMM7',
-                                                    'ref_price': 'last_close',
-                                                    'step': 1,
-                                                    'offset_buy': 1,
-                                                    'offset_sell': 1,
-                                                    'total_orders': 8,
-                                                    'min_qty': 1,
-                                                    'max_qty': 50,
-                                                    'lots_mode': 'custom',
-                                                    'lots_conditions': [
-                                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,]},
-                                                    ],
-                                                    'lots_default': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
-                                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
-                                                },
 
 
 
@@ -243,7 +206,7 @@ INSTRUMENTS = [
             'account': 'acc1',
             'figi': 'FNGM05270000',
             'ticker': 'NRK7',
-            'ref_price': 'last_close',
+            'ref_price': 'last_trade',
             'step': 0.001,
             'offset_buy': 0.01,
             'offset_sell': 0.01,
@@ -296,6 +259,44 @@ INSTRUMENTS = [
 ]
 
 INSTRUMENTSOLD = [
+
+{
+                                    'account': 'acc1',
+                                    'figi': 'FUTSILVM1226',
+                                    'ticker': 'S1Z6',
+                                    'ref_price': 'last_trade',
+                                    'step': 0.1,
+                                    'offset_buy': 0.30,
+                                    'offset_sell': 0.30,
+                                    'total_orders': 25,
+                                    'min_qty': 6,
+                                    'max_qty': 100,
+                                    'lots_mode': 'custom',
+                                    'lots_conditions': [
+                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
+                                    ],
+                                    'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+                                },
+
+{
+                                                    'account': 'acc1',
+                                                    'figi': 'FBRM06270000',
+                                                    'ticker': 'BMM7',
+                                                    'ref_price': 'last_close',
+                                                    'step': 1,
+                                                    'offset_buy': 1,
+                                                    'offset_sell': 1,
+                                                    'total_orders': 8,
+                                                    'min_qty': 1,
+                                                    'max_qty': 50,
+                                                    'lots_mode': 'custom',
+                                                    'lots_conditions': [
+                                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,]},
+                                                    ],
+                                                    'lots_default': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+                                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+                                                },
 
     {
             'account': 'acc1',

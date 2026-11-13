@@ -149,7 +149,7 @@ def get_lots_for_order(instrument, position, order_index, direction=None):
 
 
 async def run_last_close_strategy(instrument, api):
-    """Запускает воркер для last_close стратегии (1 раз в день по расписанию)"""
+    """Запускает воркер стратегии от базовой цены (1 раз в день по расписанию)"""
     inst_key = f"{instrument['account']}:{instrument['figi']}:last_close"
     if inst_key in last_close_running:
         return
@@ -158,7 +158,7 @@ async def run_last_close_strategy(instrument, api):
 
 
 async def last_close_worker(instrument, api):
-    """Воркер: ждёт точного времени, выставляет заявки от last_close"""
+    """Воркер: ждёт точного времени, выставляет заявки от базовой цены (last_close / last_trade)"""
     ticker = instrument['ticker']
     figi = instrument['figi']
     inst_key = f"{instrument['account']}:{figi}:last_close"
@@ -189,26 +189,34 @@ async def last_close_worker(instrument, api):
             print(f"[{ticker}] Уже запускались сегодня")
             continue
 
-        try:
-            ref_price_key = instrument.get('ref_price', 'last_close')
-            if ref_price_key == 'last_trade':
-                last_price = await api.get_last_trade_price(figi)
-                if not last_price:
-                    print(f"[{ticker}] Своих сделок нет, fallback на last_close")
-                    last_price = await api.get_last_price(figi)
-            else:
-                last_price = await api.get_last_price(figi)
-        except Exception as e:
-            print(f"[{ticker}] Ошибка получения цены: {e}")
-            await asyncio.sleep(60)
-            continue
+        ref_price_key = instrument.get('ref_price', 'last_close')
+        last_price = None
+        # Несколько попыток: если API не ответил, не переносим запуск на следующий день
+        for attempt in range(10):
+            try:
+                if ref_price_key == 'last_trade':
+                    last_price = await api.get_last_trade_price(figi)
+                    if last_price:
+                        print(f"[{ticker}] Цена последней своей сделки: {last_price:.3f}")
+                    else:
+                        print(f"[{ticker}] Своих сделок нет, fallback на закрытие предыдущего дня")
+                        last_price = await api.get_prev_close(figi)
+                else:
+                    last_price = await api.get_prev_close(figi)
+            except Exception as e:
+                print(f"[{ticker}] Ошибка получения цены (попытка {attempt + 1}/10): {e}")
+                last_price = None
+
+            if last_price:
+                break
+            await asyncio.sleep(30)
 
         if not last_price:
-            print(f"[{ticker}] Цена не получена")
+            print(f"[{ticker}] Цена не получена, пропуск")
             await asyncio.sleep(60)
             continue
 
-        print(f"\n[{ticker}] Last close: {last_price:.3f}")
+        print(f"\n[{ticker}] Базовая цена: {last_price:.3f} ({ref_price_key})")
 
         position = await api.get_position(figi)
         print(f"[{ticker}] Позиция: {position}")
@@ -287,8 +295,8 @@ async def run_instrument(instrument):
 
     print(f"[{ticker}] account_id: {api.account_id} (токен: {account_id})")
 
-    # Стратегия по last_close — отдельный воркер с точным расписанием
-    if instrument.get('ref_price') == 'last_close':
+    # Стратегии от базовой цены (last_close / last_trade) — отдельный воркер с точным расписанием
+    if instrument.get('ref_price') in ('last_close', 'last_trade'):
         await run_last_close_strategy(instrument, api)
         return
 

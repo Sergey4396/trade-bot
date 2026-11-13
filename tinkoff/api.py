@@ -1,4 +1,5 @@
 import aiohttp
+from datetime import datetime, timedelta, timezone
 
 TOKEN = None
 BASE_URL = 'https://invest-public-api.tbank.ru'
@@ -95,8 +96,10 @@ class TinkoffAPI:
     
     # Конвертировать цену из units/nano в float
     def _parse_price(self, price_dict):
-        units, nano = price_dict.get('units', 0), price_dict.get('nano', 0)
-        return float(f"{units}.{str(nano // 1000000).zfill(3)}")
+        units = int(price_dict.get('units', 0) or 0)
+        nano = int(price_dict.get('nano', 0) or 0)
+        sign = -1 if units < 0 or nano < 0 else 1
+        return sign * (abs(units) + abs(nano) / 1_000_000_000)
     
     # Получить позицию по инструменту (баланс + заблокировано)
     async def get_position(self, figi):
@@ -108,7 +111,7 @@ class TinkoffAPI:
                 return int(pos.get('balance', 0)) + int(pos.get('blocked', 0))
         return 0
     
-    # Получить последнюю цену закрытия
+    # Получить последнюю цену (это последняя СДЕЛКА, а не цена закрытия!)
     async def get_last_price(self, figi):
         data = await self._request('GetLastPrices', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices', {'figi': [figi]})
         prices = data.get('lastPrices', [])
@@ -116,23 +119,108 @@ class TinkoffAPI:
             return self._parse_price(prices[0].get('price', {}))
         return None
 
-    # Получить цену последней СВОЕЙ сделки по инструменту (любой давности)
+    # Получить цену закрытия предыдущего торгового дня (именно close дневной свечи)
+    async def get_prev_close(self, figi):
+        now = datetime.now(timezone.utc)
+        data = await self._request('GetCandles',
+            f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles',
+            {
+                'figi': figi,
+                'from': (now - timedelta(days=14)).strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'to': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'interval': 'CANDLE_INTERVAL_DAY',
+            })
+        candles = data.get('candles') or []
+        # Дневная свеча датируется началом торгового дня (00:00Z), сегодняшняя ещё не закрыта — пропускаем её
+        today_moscow = (now + timedelta(hours=3)).date().isoformat()
+        for candle in reversed(candles):
+            if str(candle.get('time', ''))[:10] >= today_moscow:
+                continue
+            price = self._parse_price(candle.get('close') or {})
+            if price:
+                return price
+        return None
+
+    # Разобрать ISO-время из REST (суффикс Z, до 9 знаков дробной части)
+    def _parse_time(self, value):
+        if not value:
+            return None
+        s = str(value).strip().replace('Z', '+00:00')
+        if '.' in s:
+            base, rest = s.split('.', 1)
+            i = 0
+            while i < len(rest) and rest[i].isdigit():
+                i += 1
+            s = f"{base}.{(rest[:i] + '000000')[:6]}{rest[i:]}"
+        try:
+            return datetime.fromisoformat(s)
+        except ValueError:
+            return None
+
+    # Получить цену последней СВОЕЙ исполненной сделки по инструменту (любой давности)
     async def get_last_trade_price(self, figi):
         if not self.account_id:
             await self.get_account_id()
-        data = await self._request('GetOperationsByCursor',
-            f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetOperationsByCursor',
-            {'accountId': self.account_id, 'limit': 200})
-        items = data.get('items', [])
-        for item in items:
-            if item.get('figi') != figi:
-                continue
-            op_type = item.get('operationType', '')
-            if op_type in ('Buy', 'Sell', 'BuyCard', 'SellCard'):
-                price_obj = item.get('price', {})
-                if price_obj:
-                    return self._parse_price(price_obj)
-        return None
+        trade_types = [
+            'OPERATION_TYPE_BUY', 'OPERATION_TYPE_SELL',
+            'OPERATION_TYPE_BUY_CARD', 'OPERATION_TYPE_SELL_CARD',
+        ]
+        cursor = None
+        best_time = None
+        best_price = None
+        fallback_time = None
+        fallback_price = None
+        empty_pages = 0
+
+        # ВАЖНО: item['date'] — это дата ПОРУЧЕНИЯ, а не исполнения. Заявка, выставленная
+        # давно и исполненная сейчас, остаётся на старом месте в списке. Поэтому реальную
+        # дату и цену исполнения берём из tradesInfo.trades — у каждой сделки своя дата.
+        for _ in range(100):
+            payload = {
+                'accountId': self.account_id,
+                'instrumentId': figi,
+                'limit': 1000,
+                'operationTypes': trade_types,
+            }
+            if cursor:
+                payload['cursor'] = cursor
+            data = await self._request('GetOperationsByCursor',
+                f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetOperationsByCursor',
+                payload)
+
+            found_new = False
+            for item in data.get('items', []):
+                trades = ((item.get('tradesInfo') or {}).get('trades') or [])
+                for trade in trades:
+                    trade_time = self._parse_time(trade.get('date'))
+                    price = self._parse_price(trade.get('price') or {})
+                    if trade_time and price and (best_time is None or trade_time > best_time):
+                        best_time, best_price = trade_time, price
+                        found_new = True
+
+                # Старые операции могут прийти без tradesInfo — берём цену поручения как fallback
+                if not trades and item.get('state') == 'OPERATION_STATE_EXECUTED':
+                    item_time = self._parse_time(item.get('date'))
+                    price = self._parse_price(item.get('price') or {})
+                    if item_time and price and (fallback_time is None or item_time > fallback_time):
+                        fallback_time, fallback_price = item_time, price
+
+            # Останавливаемся, когда уже нашли исполнение и ещё 2 страницы (около 20 дней
+            # при лимите 1000) не дали ничего новее. Если исполнений не было — идём до конца.
+            if found_new:
+                empty_pages = 0
+            elif best_price:
+                empty_pages += 1
+                if empty_pages >= 2:
+                    break
+
+            if not data.get('hasNext'):
+                break
+            cursor = data.get('nextCursor')
+            if not cursor:
+                break
+
+        return best_price or fallback_price
 
     # Получить текстовый статус (для HTTP)
     async def status_text(self, figi):
