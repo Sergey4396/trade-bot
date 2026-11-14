@@ -160,6 +160,13 @@ def catch_up_delay(instrument, day):
     return max(0, int((mine - min(targets)).total_seconds()))
 
 
+def is_out_of_price_limits(error):
+    """Биржа не даёт выставлять цены за границей дневного коридора (код 30099).
+    Уровни лесенки идут монотонно от рынка, поэтому дальше пробовать бессмысленно"""
+    text = str(error).lower()
+    return '30099' in text or 'outside the limits' in text
+
+
 async def run_last_close_strategy(instrument, api):
     """Запускает воркер стратегии от базовой цены (1 раз в день по расписанию)"""
     inst_key = f"{instrument['account']}:{instrument['figi']}:last_close"
@@ -287,6 +294,13 @@ async def last_close_worker(instrument, api):
                     if placed <= 3:
                         print(f"  BUY {i+1}: {lots} @ {price:.3f}")
                 except Exception as e:
+                    if is_out_of_price_limits(e):
+                        rest = [j for j in range(i, total_orders)
+                                if get_lots_for_order(instrument, position, j, 'BUY')]
+                        last_px = round(start_buy - step * rest[-1], 3)
+                        print(f"  BUY: {len(rest)} уровней вне коридора биржи "
+                              f"({price:.3f}…{last_px:.3f}) — дальше не выставляем")
+                        break
                     failed += 1
                     if failed <= 3:
                         print(f"  BUY {i+1} ошибка: {str(e)[:200]}")
@@ -316,6 +330,13 @@ async def last_close_worker(instrument, api):
                     if placed <= 3:
                         print(f"  SELL {i+1}: {lots} @ {price:.3f}")
                 except Exception as e:
+                    if is_out_of_price_limits(e):
+                        rest = [j for j in range(i, total_orders)
+                                if get_lots_for_order(instrument, position, j, 'SELL')]
+                        last_px = round(start_sell + step * rest[-1], 3)
+                        print(f"  SELL: {len(rest)} уровней вне коридора биржи "
+                              f"({price:.3f}…{last_px:.3f}) — дальше не выставляем")
+                        break
                     failed += 1
                     if failed <= 3:
                         print(f"  SELL {i+1} ошибка: {str(e)[:200]}")
@@ -410,6 +431,13 @@ async def run_instrument(instrument):
                         print(f"  BUY {i+1}: {lots} @ {price:.3f}")
                     projected += lots
                 except Exception as e:
+                    if is_out_of_price_limits(e):
+                        rest = [j for j in range(i, total_orders)
+                                if get_lots_for_order(instrument, position, j, 'BUY')]
+                        last_px = round(start_buy - step * rest[-1], 3)
+                        print(f"  BUY: {len(rest)} уровней вне коридора биржи "
+                              f"({price:.3f}…{last_px:.3f}) — дальше не выставляем")
+                        break
                     if i < 3:
                         print(f"  BUY {i+1} ошибка: {str(e)[:30]}")
                 await asyncio.sleep(0.05)
@@ -432,6 +460,13 @@ async def run_instrument(instrument):
                         print(f"  SELL {i+1}: {lots} @ {price:.3f}")
                     projected -= lots
                 except Exception as e:
+                    if is_out_of_price_limits(e):
+                        rest = [j for j in range(i, total_orders)
+                                if get_lots_for_order(instrument, position, j, 'SELL')]
+                        last_px = round(start_sell + step * rest[-1], 3)
+                        print(f"  SELL: {len(rest)} уровней вне коридора биржи "
+                              f"({price:.3f}…{last_px:.3f}) — дальше не выставляем")
+                        break
                     if i < 3:
                         print(f"  SELL {i+1} ошибка: {str(e)[:30]}")
                 await asyncio.sleep(0.05)
