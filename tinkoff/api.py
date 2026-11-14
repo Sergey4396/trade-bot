@@ -1,3 +1,5 @@
+import asyncio
+import time
 import aiohttp
 from datetime import datetime, timedelta, timezone
 
@@ -28,6 +30,21 @@ class TinkoffAPI:
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
+        self._orders_lock = None
+        self._last_orders_call = 0.0
+
+    # Ограничитель частоты запросов к сервису ордеров (общий для всех воркеров).
+    # postOrder: 15 запросов/сек, сервис ордеров целиком — 50-100 запросов/мин (REST).
+    ORDERS_MIN_INTERVAL = 0.12
+
+    async def _throttle_orders(self):
+        if self._orders_lock is None:
+            self._orders_lock = asyncio.Lock()
+        async with self._orders_lock:
+            wait = self.ORDERS_MIN_INTERVAL - (time.monotonic() - self._last_orders_call)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_orders_call = time.monotonic()
     
     # Внутренний метод для HTTP запросов к API
     async def _request(self, method, url, data=None):
@@ -60,6 +77,7 @@ class TinkoffAPI:
     async def cancel_order(self, order_id):
         if not self.account_id:
             await self.get_account_id()
+        await self._throttle_orders()
         return await self._request('CancelOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/CancelOrder', {'accountId': self.account_id, 'orderId': order_id})
     
     # Выставить заявку
@@ -70,13 +88,38 @@ class TinkoffAPI:
     async def post_order(self, figi, quantity, direction, price=None):
         if not self.account_id:
             await self.get_account_id()
+        if not quantity or int(quantity) <= 0:
+            raise ValueError(f"quantity должна быть > 0, получено {quantity}")
         order_data = {'figi': figi, 'quantity': str(quantity), 'direction': direction, 'accountId': self.account_id, 'orderType': 'ORDER_TYPE_LIMIT'}
         if price:
             # FUT и FNGM — газ (обычный и мини), 3 знака; остальные — 2
             price_str = f"{price:.3f}" if (figi.startswith('FUT') or figi.startswith('FNG')) else f"{price:.2f}"
             parts = price_str.split('.')
             order_data['price'] = {'units': int(parts[0]), 'nano': int(parts[1].ljust(9, '0')[:9])}
-        return await self._request('PostOrder', f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder', order_data)
+
+        url = f'{BASE_URL}/rest/tinkoff.public.invest.api.contract.v1.OrdersService/PostOrder'
+        last_error = None
+        # Tinkoff отвечает HTTP 400 и телом-ошибкой: без явной проверки такие заявки
+        # раньше молча считались выставленными.
+        for attempt in range(4):
+            await self._throttle_orders()
+            resp = await self._request('PostOrder', url, order_data)
+            if isinstance(resp, dict) and 'orderId' in resp:
+                return resp
+            last_error = resp
+            text = str(resp)
+            rate_limited = (
+                (isinstance(resp, dict) and str(resp.get('code')) == '8')
+                or 'RESOURCE_EXHAUSTED' in text
+                or 'resource exhausted' in text.lower()
+                or 'too many requests' in text.lower()
+                or '429' in text
+            )
+            if rate_limited:
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            break
+        raise RuntimeError(f"PostOrder {figi} {direction} {quantity}@{price}: {last_error}")
     
     # Получить цену фьючерса из стакана (среднее между bid и ask)
     async def get_futures_price(self, figi):
