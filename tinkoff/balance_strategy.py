@@ -148,6 +148,13 @@ def get_lots_for_order(instrument, position, order_index, direction=None):
     return 1
 
 
+def scheduled_time_for_day(run_at, day):
+    """Время запуска для конкретного дня — день недели берётся у самого дня, а не у 'сегодня'"""
+    target_str = run_at.get('weekend') if day.weekday() >= 5 else run_at.get('weekdays')
+    target_hour, target_minute = map(int, target_str.split(':'))
+    return day.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+
+
 async def run_last_close_strategy(instrument, api):
     """Запускает воркер стратегии от базовой цены (1 раз в день по расписанию)"""
     inst_key = f"{instrument['account']}:{instrument['figi']}:last_close"
@@ -172,17 +179,22 @@ async def last_close_worker(instrument, api):
 
     while True:
         now = datetime.now(MOSCOW_TZ)
-        weekday = now.weekday()
-        target_str = run_at.get('weekend') if weekday >= 5 else run_at.get('weekdays')
-        target_hour, target_minute = map(int, target_str.split(':'))
+        ran_today = inst_key in last_run_times and last_run_times[inst_key].date() == now.date()
+        today_target = scheduled_time_for_day(run_at, now)
 
-        target = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
+        # Догоняем сегодняшний запуск, если он уже прошёл недавно (например, после рестарта).
+        # Если запуск был давно — ждём следующий день, чтобы не выставить заявки вечером.
+        catch_up = (not ran_today
+                    and today_target <= now
+                    and now - today_target <= timedelta(hours=2))
 
-        wait_seconds = (target - now).total_seconds()
-        print(f"[{ticker}] Следующий запуск: {target.strftime('%m/%d %H:%M')} (через {wait_seconds:.0f} сек)")
-        await asyncio.sleep(wait_seconds)
+        if catch_up:
+            print(f"[{ticker}] Догоняем сегодняшний запуск {today_target.strftime('%m/%d %H:%M')}")
+        else:
+            target = today_target if today_target > now else scheduled_time_for_day(run_at, now + timedelta(days=1))
+            wait_seconds = (target - now).total_seconds()
+            print(f"[{ticker}] Следующий запуск: {target.strftime('%m/%d %H:%M')} (через {wait_seconds:.0f} сек)")
+            await asyncio.sleep(wait_seconds)
 
         now = datetime.now(MOSCOW_TZ)
         if inst_key in last_run_times and last_run_times[inst_key].date() == now.date():
@@ -277,7 +289,7 @@ async def last_close_worker(instrument, api):
                 await asyncio.sleep(0.05)
 
         print(f"[{ticker}] Готово")
-        last_run_times[inst_key] = datetime.now()
+        last_run_times[inst_key] = datetime.now(MOSCOW_TZ)
 
 
 async def run_instrument(instrument):
