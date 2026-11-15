@@ -77,6 +77,25 @@ INSTRUMENTS = [
                 },
 
 {
+                                    'account': 'acc1',
+                                    'figi': 'FUTSILVM1226',
+                                    'ticker': 'S1Z6',
+                                    'ref_price': 'last_trade',
+                                    'step': 0.1,
+                                    'offset_buy': 0.70,
+                                    'offset_sell': 0.70,
+                                    'total_orders': 25,
+                                    'min_qty': 6,
+                                    'max_qty': 100,
+                                    'lots_mode': 'custom',
+                                    'lots_conditions': [
+                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
+                                    ],
+                                    'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+                                },
+
+{
             'account': 'acc1',
             'figi': 'FTRNF0327000',
             'ticker': 'TNH7',
@@ -259,25 +278,6 @@ INSTRUMENTS = [
 ]
 
 INSTRUMENTSOLD = [
-
-{
-                                    'account': 'acc1',
-                                    'figi': 'FUTSILVM1226',
-                                    'ticker': 'S1Z6',
-                                    'ref_price': 'last_trade',
-                                    'step': 0.1,
-                                    'offset_buy': 0.30,
-                                    'offset_sell': 0.30,
-                                    'total_orders': 25,
-                                    'min_qty': 6,
-                                    'max_qty': 100,
-                                    'lots_mode': 'custom',
-                                    'lots_conditions': [
-                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
-                                    ],
-                                    'lots_default': [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
-                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
-                                },
 
 {
                                                     'account': 'acc1',
