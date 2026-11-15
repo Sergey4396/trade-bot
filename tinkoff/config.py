@@ -96,6 +96,25 @@ INSTRUMENTS = [
                                 },
 
 {
+                                                    'account': 'acc1',
+                                                    'figi': 'FBRM06270000',
+                                                    'ticker': 'BMM7',
+                                                    'ref_price': 'last_close',
+                                                    'step': 0.5,
+                                                    'offset_buy': 3,
+                                                    'offset_sell': 3,
+                                                    'total_orders': 8,
+                                                    'min_qty': 1,
+                                                    'max_qty': 25,
+                                                    'lots_mode': 'custom',
+                                                    'lots_conditions': [
+                                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1], 'sell_array': [1,2,3,3,3,3,1,1,]},
+                                                    ],
+                                                    'lots_default': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+                                                    'run_at': {'weekdays': '06:59', 'weekend': '09:59'},
+                                                },
+
+{
             'account': 'acc1',
             'figi': 'FTRNF0327000',
             'ticker': 'TNH7',
@@ -278,25 +297,6 @@ INSTRUMENTS = [
 ]
 
 INSTRUMENTSOLD = [
-
-{
-                                                    'account': 'acc1',
-                                                    'figi': 'FBRM06270000',
-                                                    'ticker': 'BMM7',
-                                                    'ref_price': 'last_close',
-                                                    'step': 1,
-                                                    'offset_buy': 1,
-                                                    'offset_sell': 1,
-                                                    'total_orders': 8,
-                                                    'min_qty': 1,
-                                                    'max_qty': 50,
-                                                    'lots_mode': 'custom',
-                                                    'lots_conditions': [
-                                                    {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,]},
-                                                    ],
-                                                    'lots_default': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
-                                                    'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
-                                                },
 
     {
             'account': 'acc1',
