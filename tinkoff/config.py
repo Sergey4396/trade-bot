@@ -151,9 +151,6 @@ INSTRUMENTS = [
             'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
         },
 
-        '': 5, //GKH7  GMKN-3.27 Норильский никель
-
-
 
 {
             'account': 'acc1',
