@@ -132,6 +132,26 @@ INSTRUMENTS = [
             'lots_default': [1,],
             'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
         },
+{
+            'account': 'acc1',
+            'figi': 'FGMKN0327000',
+            'ticker': 'GKH7',
+            'ref_price': 'last_close',
+            'step': 1,
+            'offset_buy': 3,
+            'offset_sell': 6,
+            'total_orders': 40,
+            'min_qty': 1,
+            'max_qty': 300,
+            'lots_mode': 'custom',
+            'lots_conditions': [
+            {'min': None, 'max': None, 'buy_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,], 'sell_array': [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,]},
+            ],
+            'lots_default': [1,],
+            'run_at': {'weekdays': '07:01', 'weekend': '10:01'},
+        },
+
+        '': 5, //GKH7  GMKN-3.27 Норильский никель
 
 
 
